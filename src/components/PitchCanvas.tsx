@@ -202,8 +202,8 @@ export function PitchCanvas({
             style={[
               styles.slotNode,
               {
-                left: x - 28,
-                top: y - 26,
+                left: x - 34,
+                top: y - 27,
               },
               isSelected && styles.slotNodeSelected,
             ]}>
@@ -230,7 +230,11 @@ export function PitchCanvas({
                   <Text style={styles.tokenPos}>{slot.positionName}</Text>
                 </View>
                 <View style={styles.tokenBottom}>
-                  <Text style={styles.tokenName} numberOfLines={1}>
+                  <Text
+                    style={styles.tokenName}
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}>
                     {slot.playerName}
                   </Text>
                 </View>
@@ -259,8 +263,8 @@ const styles = StyleSheet.create({
   },
   slotNode: {
     position: 'absolute',
-    width: 56,
-    height: 52,
+    width: 68,
+    height: 54,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
@@ -271,12 +275,12 @@ const styles = StyleSheet.create({
   },
   captainBadge: {
     position: 'absolute',
-    top: -4,
+    top: -5,
     right: -2,
     backgroundColor: '#D4AF37',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 1.5,
     borderColor: '#000',
     justifyContent: 'center',
@@ -284,14 +288,14 @@ const styles = StyleSheet.create({
     zIndex: 15,
   },
   captainText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '900',
     color: '#000',
   },
   formationToken: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: '#0A1128',
     borderWidth: 2.5,
     borderColor: '#FFF',
@@ -310,8 +314,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   playerToken: {
-    width: 56,
-    height: 48,
+    width: 68,
+    minHeight: 48,
     backgroundColor: '#0A1128',
     borderWidth: 2,
     borderColor: '#000',
@@ -332,24 +336,26 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   tokenOvr: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '900',
     color: '#D4AF37',
   },
   tokenPos: {
     fontSize: 9,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#FFF',
   },
   tokenBottom: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 2,
     paddingVertical: 2,
+    minHeight: 22,
     justifyContent: 'center',
     alignItems: 'center',
   },
   tokenName: {
-    fontSize: 9,
+    fontSize: 8.5,
+    lineHeight: 10.5,
     fontWeight: '900',
     color: '#0A1128',
     textAlign: 'center',

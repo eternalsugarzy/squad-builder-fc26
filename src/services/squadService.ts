@@ -346,3 +346,13 @@ export async function removePlayerFromBench(benchId: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync('DELETE FROM squad_bench WHERE id = ?', benchId);
 }
+
+/**
+ * Clear all starting XI slots and bench players for a squad to build manually from scratch.
+ */
+export async function clearEntireSquad(squadId: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync('UPDATE squad_slots SET player_id = NULL, is_captain = 0 WHERE squad_id = ?', squadId);
+  await db.runAsync('DELETE FROM squad_bench WHERE squad_id = ?', squadId);
+}
+

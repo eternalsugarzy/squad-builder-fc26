@@ -293,6 +293,18 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* ─── Developer Credit Card ────────────── */}
+        <View style={styles.devCard}>
+          <View style={styles.devHeaderRow}>
+            <Text style={styles.devTag}>APP CREATOR & DEVELOPER</Text>
+            <View style={styles.devVerBadge}>
+              <Text style={styles.devVerText}>v1.0</Text>
+            </View>
+          </View>
+          <Text style={styles.devName}>Irwan Firmanto</Text>
+          <Text style={styles.devSub}>FC 26 Career Mode Manager • Personal iOS Edition</Text>
+        </View>
       </ScrollView>
 
       {/* Add Modal */}
@@ -484,10 +496,58 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 130,
   },
   listWrapper: {
     marginBottom: 12,
+  },
+
+  // Developer Card
+  devCard: {
+    marginTop: 16,
+    borderWidth: 3,
+    borderColor: '#000',
+    backgroundColor: '#0A1128',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
+  },
+  devHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  devTag: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#D4AF37',
+    letterSpacing: 1.5,
+  },
+  devVerBadge: {
+    backgroundColor: '#D4AF37',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  devVerText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#000',
+  },
+  devName: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+  devSub: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#E0E0E0',
+    marginTop: 4,
   },
 
   // Profile card

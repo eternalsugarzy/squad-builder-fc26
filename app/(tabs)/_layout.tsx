@@ -16,16 +16,24 @@ export default function TabLayout() {
           backgroundColor: '#FFFFFF',
         },
         headerTitleStyle: {
-          fontWeight: 'bold',
+          fontWeight: '900',
           fontSize: 18,
+          color: '#0A1128',
+          letterSpacing: 1,
         },
         tabBarButton: HapticTab,
-        tabBarStyle: Platform.select({
-          ios: {
-            position: 'absolute',
-          },
-          default: {},
-        }),
+        tabBarLabelStyle: {
+          fontWeight: '800',
+          fontSize: 11,
+        },
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 3,
+          borderTopColor: '#000000',
+          height: Platform.OS === 'ios' ? 88 : 64,
+          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
+          paddingTop: 6,
+        },
       }}>
       <Tabs.Screen
         name="index"

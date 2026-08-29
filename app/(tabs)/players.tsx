@@ -1138,7 +1138,7 @@ const styles = StyleSheet.create({
   // Player List
   listContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 160,
   },
   emptyList: {
     padding: 40,
@@ -1281,7 +1281,7 @@ const styles = StyleSheet.create({
   // Floating Button
   fabAdd: {
     position: 'absolute',
-    bottom: 24,
+    bottom: Platform.OS === 'ios' ? 96 : 76,
     left: 20,
     right: 20,
     backgroundColor: '#0A1128',

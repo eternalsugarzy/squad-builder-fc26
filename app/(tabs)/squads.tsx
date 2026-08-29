@@ -10,6 +10,9 @@ import {
   Modal,
   Pressable,
   FlatList,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useProfile } from '@/src/contexts/ProfileContext';
 import {
@@ -21,6 +24,8 @@ import {
   swapPlayers,
   addPlayerToBench,
   removePlayerFromBench,
+  clearEntireSquad,
+  renameSquad,
   type SquadFull,
 } from '@/src/services/squadService';
 import { listFormations, type FormationWithSlots } from '@/src/services/formationService';
@@ -75,6 +80,10 @@ export default function SquadsScreen() {
   // Dropdown Modals
   const [showFormationPicker, setShowFormationPicker] = useState(false);
   const [showPlaystylePicker, setShowPlaystylePicker] = useState(false);
+
+  // Rename Squad State
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [newSquadName, setNewSquadName] = useState('');
 
   const loadData = useCallback(async () => {
     if (!activeProfile) return;
@@ -177,6 +186,46 @@ export default function SquadsScreen() {
     }
   }
 
+  // ─── Manual Squad Building & Rename ─────────
+  function handleClearSquad() {
+    if (!currentSquad) return;
+    Alert.alert(
+      'Kosongkan Tim Sheet',
+      `Yakin ingin mengosongkan seluruh pemain di "${currentSquad.nama_tim}"?\n\nAnda dapat menyusun kembali pemain satu per satu secara manual.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Kosongkan',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await clearEntireSquad(currentSquad.id);
+              loadData();
+            } catch (e) {
+              Alert.alert('Error', 'Gagal mengosongkan squad');
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  async function handleSaveRenameSquad() {
+    if (!currentSquad) return;
+    const trimmed = newSquadName.trim();
+    if (!trimmed) {
+      Alert.alert('Error', 'Nama tim tidak boleh kosong');
+      return;
+    }
+    try {
+      await renameSquad(currentSquad.id, trimmed);
+      setShowRenameModal(false);
+      loadData();
+    } catch (e) {
+      Alert.alert('Error', 'Gagal mengganti nama tim');
+    }
+  }
+
   // ─── Slot Tap Handling ─────────────────────────
   function handleSlotPress(slotItem: PitchSlotItem) {
     if (!currentSquad) return;
@@ -193,6 +242,11 @@ export default function SquadsScreen() {
       };
       executeSwap(swapSource, target);
       setSwapSource(null);
+    } else if (!starter.player_id) {
+      // Direct open player picker if slot is empty for fast manual building!
+      setSelectedSlot(starter);
+      setIsPickingForBench(false);
+      setShowPlayerPicker(true);
     } else {
       setSelectedSlot(starter);
       setShowSlotActionModal(true);
@@ -330,13 +384,20 @@ export default function SquadsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ─── Top Auto-Generate Action Bar ─────────── */}
+      {/* ─── Top Action Bar ───────────────────────── */}
       <View style={styles.autoGenBanner}>
         <TouchableOpacity
           style={styles.autoGenBannerBtn}
           onPress={handleOpenAutoGenerate}
           activeOpacity={0.8}>
-          <Text style={styles.autoGenBannerBtnText}>⚡ AUTO-GENERATE TEAM SHEET</Text>
+          <Text style={styles.autoGenBannerBtnText}>⚡ AUTO-GENERATE</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.manualClearBtn}
+          onPress={handleClearSquad}
+          activeOpacity={0.8}>
+          <Text style={styles.manualClearBtnText}>🛠️ KOSONGKAN TIM</Text>
         </TouchableOpacity>
       </View>
 
@@ -365,6 +426,26 @@ export default function SquadsScreen() {
         })}
       </View>
 
+      {/* ─── Squad Name & Rename Bar ──────────────── */}
+      <View style={styles.squadNameBar}>
+        <View style={styles.squadNameInfo}>
+          <Text style={styles.squadNameTitle} numberOfLines={1}>
+            {currentSquad.nama_tim}
+          </Text>
+          <Text style={styles.squadNameSub}>
+            {currentSquad.avg_ovr ? `Rating Tim: ${currentSquad.avg_ovr}` : 'Belum disusun'}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.renameBtn}
+          onPress={() => {
+            setNewSquadName(currentSquad.nama_tim);
+            setShowRenameModal(true);
+          }}>
+          <Text style={styles.renameBtnText}>✏️ GANTI NAMA</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* ─── Active Swap Banner ───────────────────── */}
       {swapSource && (
         <View style={styles.swapBanner}>
@@ -380,6 +461,13 @@ export default function SquadsScreen() {
       )}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* ─── Manual Tip Banner ──────────────────── */}
+        <View style={styles.manualTipBanner}>
+          <Text style={styles.manualTipText}>
+            💡 <Text style={{ fontWeight: '900' }}>Penyusunan Manual:</Text> Tap slot kosong di lapangan untuk memilih pemain. Tap pemain terisi untuk swap / kapten.
+          </Text>
+        </View>
+
         {/* ─── Squad Config Header Bar ────────────── */}
         <View style={styles.configCard}>
           {/* Formation Picker Button */}
@@ -734,6 +822,46 @@ export default function SquadsScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* ─── RENAME SQUAD MODAL ──────────────────── */}
+      <Modal
+        visible={showRenameModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRenameModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowRenameModal(false)}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalCenter}>
+            <Pressable style={styles.renameModalCard} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.modalTitle}>GANTI NAMA TIM</Text>
+              <TextInput
+                style={styles.renameInput}
+                placeholder="Nama tim (misal: Tim Utama UCL)"
+                placeholderTextColor="#999"
+                value={newSquadName}
+                onChangeText={setNewSquadName}
+                autoFocus
+                maxLength={40}
+                returnKeyType="done"
+                onSubmitEditing={handleSaveRenameSquad}
+              />
+              <View style={styles.renameActions}>
+                <TouchableOpacity
+                  style={styles.renameCancelBtn}
+                  onPress={() => setShowRenameModal(false)}>
+                  <Text style={styles.renameCancelText}>BATAL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.renameConfirmBtn}
+                  onPress={handleSaveRenameSquad}>
+                  <Text style={styles.renameConfirmText}>SIMPAN</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -843,7 +971,7 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 130,
   },
 
   // Config Card
@@ -1144,24 +1272,158 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAFA',
     borderBottomWidth: 2,
     borderBottomColor: '#000',
+    flexDirection: 'row',
+    gap: 8,
   },
   autoGenBannerBtn: {
+    flex: 1,
     backgroundColor: '#D4AF37',
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#000',
     shadowColor: '#000',
-    shadowOffset: { width: 3, height: 3 },
+    shadowOffset: { width: 2, height: 2 },
     shadowOpacity: 1,
     shadowRadius: 0,
     elevation: 3,
   },
   autoGenBannerBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '900',
     color: '#000',
-    letterSpacing: 1.5,
+    letterSpacing: 1,
+  },
+  manualClearBtn: {
+    flex: 1,
+    backgroundColor: '#0A1128',
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  manualClearBtnText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+  squadNameBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#DDD',
+  },
+  squadNameInfo: {
+    flex: 1,
+  },
+  squadNameTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0A1128',
+  },
+  squadNameSub: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  renameBtn: {
+    borderWidth: 1.5,
+    borderColor: '#000',
+    backgroundColor: '#FAFAFA',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  renameBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0A1128',
+  },
+  manualTipBanner: {
+    backgroundColor: '#F0F4FF',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#CCE0FF',
+  },
+  manualTipText: {
+    fontSize: 11,
+    color: '#0A1128',
+    lineHeight: 15,
+  },
+  modalCenter: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0A1128',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  renameModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: '#000',
+    padding: 20,
+    width: '85%',
+    maxWidth: 380,
+    shadowColor: '#000',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 8,
+  },
+  renameInput: {
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#FAFAFA',
+    padding: 10,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0A1128',
+    marginBottom: 16,
+  },
+  renameActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  renameCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#F0F0F0',
+  },
+  renameCancelText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#333',
+  },
+  renameConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#D4AF37',
+  },
+  renameConfirmText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#000',
   },
   autoGenCard: {
     backgroundColor: '#FFFFFF',

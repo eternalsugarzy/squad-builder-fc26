@@ -462,12 +462,19 @@ export default function FormationsScreen() {
       {/* ─── FORMASI SECTION ─────────────────────────── */}
       {activeSection === 'formations' && (
         <View style={styles.sectionContent}>
+          {/* Top Action Banner */}
+          <View style={styles.topActionBar}>
+            <TouchableOpacity style={styles.topActionBtn} onPress={openNewFormation} activeOpacity={0.8}>
+              <Text style={styles.topActionBtnText}>+ BUAT FORMASI BARU</Text>
+            </TouchableOpacity>
+          </View>
+
           {fLoading ? (
             <ActivityIndicator size="large" color="#0A1128" style={{ marginTop: 40 }} />
           ) : formations.length === 0 ? (
             <View style={styles.emptySection}>
               <Text style={styles.emptySectionText}>Belum ada formasi.</Text>
-              <Text style={styles.emptyHint}>Buat formasi baru untuk menyusun Tim.</Text>
+              <Text style={styles.emptyHint}>Tap tombol di atas untuk membuat formasi baru.</Text>
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
@@ -499,13 +506,18 @@ export default function FormationsScreen() {
                     <View style={styles.formationActions}>
                       <TouchableOpacity
                         style={styles.formActionBtn}
+                        onPress={() => openEditFormation(f)}>
+                        <Text style={styles.formActionText}>✏️ Edit Formasi</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.formActionBtn}
                         onPress={() => handleDuplicateFormation(f)}>
                         <Text style={styles.formActionText}>📋 Duplikat</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.formActionBtn, styles.deleteBtn]}
                         onPress={() => handleDeleteFormation(f)}>
-                        <Text style={styles.formActionText}>🗑️ Hapus</Text>
+                        <Text style={[styles.formActionText, { color: '#C5221F' }]}>🗑️ Hapus</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -513,54 +525,65 @@ export default function FormationsScreen() {
               })}
             </ScrollView>
           )}
-
-          <TouchableOpacity style={styles.addButton} onPress={openNewFormation} activeOpacity={0.8}>
-            <Text style={styles.addButtonText}>+ BUAT FORMASI BARU</Text>
-          </TouchableOpacity>
         </View>
       )}
 
       {/* ─── POSISI SECTION ──────────────────────────── */}
       {activeSection === 'positions' && (
         <View style={styles.sectionContent}>
+          {/* Top Action Banner */}
+          <View style={styles.topActionBar}>
+            <TouchableOpacity style={styles.topActionBtn} onPress={openAddPosition} activeOpacity={0.8}>
+              <Text style={styles.topActionBtnText}>+ TAMBAH POSISI BARU</Text>
+            </TouchableOpacity>
+          </View>
+
           {posLoading ? (
             <ActivityIndicator size="large" color="#0A1128" style={{ marginTop: 40 }} />
           ) : positions.length === 0 ? (
             <View style={styles.emptySection}>
               <Text style={styles.emptySectionText}>Belum ada posisi</Text>
+              <Text style={styles.emptyHint}>Tap tombol di atas untuk menambah posisi baru.</Text>
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
               {positions.map((pos) => (
                 <View key={pos.id} style={styles.listItem}>
+                  <View style={styles.posIconBadge}>
+                    <Text style={styles.posIconText}>{pos.nama}</Text>
+                  </View>
                   <Text style={styles.listItemName}>{pos.nama}</Text>
                   <View style={styles.listItemActions}>
                     <TouchableOpacity style={styles.listItemBtn} onPress={() => openEditPosition(pos)}>
-                      <Text style={styles.listItemBtnText}>✏️</Text>
+                      <Text style={styles.listItemBtnText}>✏️ Edit</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.listItemBtn} onPress={() => handleDeletePosition(pos)}>
-                      <Text style={styles.listItemBtnText}>🗑️</Text>
+                      <Text style={[styles.listItemBtnText, { color: '#C5221F' }]}>🗑️ Hapus</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               ))}
             </ScrollView>
           )}
-
-          <TouchableOpacity style={styles.addButton} onPress={openAddPosition} activeOpacity={0.8}>
-            <Text style={styles.addButtonText}>+ TAMBAH POSISI</Text>
-          </TouchableOpacity>
         </View>
       )}
 
       {/* ─── PLAYSTYLE SECTION ───────────────────────── */}
       {activeSection === 'playstyles' && (
         <View style={styles.sectionContent}>
+          {/* Top Action Banner */}
+          <View style={styles.topActionBar}>
+            <TouchableOpacity style={styles.topActionBtn} onPress={openAddPlaystyle} activeOpacity={0.8}>
+              <Text style={styles.topActionBtnText}>+ TAMBAH PLAYSTYLE BARU</Text>
+            </TouchableOpacity>
+          </View>
+
           {psLoading ? (
             <ActivityIndicator size="large" color="#0A1128" style={{ marginTop: 40 }} />
           ) : playstyles.length === 0 ? (
             <View style={styles.emptySection}>
               <Text style={styles.emptySectionText}>Belum ada playstyle</Text>
+              <Text style={styles.emptyHint}>Tap tombol di atas untuk menambah playstyle baru.</Text>
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
@@ -572,20 +595,16 @@ export default function FormationsScreen() {
                   </View>
                   <View style={styles.listItemActions}>
                     <TouchableOpacity style={styles.listItemBtn} onPress={() => openEditPlaystyle(ps)}>
-                      <Text style={styles.listItemBtnText}>✏️</Text>
+                      <Text style={styles.listItemBtnText}>✏️ Edit</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.listItemBtn} onPress={() => handleDeletePlaystyle(ps)}>
-                      <Text style={styles.listItemBtnText}>🗑️</Text>
+                      <Text style={[styles.listItemBtnText, { color: '#C5221F' }]}>🗑️ Hapus</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               ))}
             </ScrollView>
           )}
-
-          <TouchableOpacity style={styles.addButton} onPress={openAddPlaystyle} activeOpacity={0.8}>
-            <Text style={styles.addButtonText}>+ TAMBAH PLAYSTYLE</Text>
-          </TouchableOpacity>
         </View>
       )}
 
@@ -902,9 +921,48 @@ const styles = StyleSheet.create({
   sectionContent: {
     flex: 1,
   },
+  topActionBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#FAFAFA',
+    borderBottomWidth: 2,
+    borderBottomColor: '#000',
+  },
+  topActionBtn: {
+    backgroundColor: '#0A1128',
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  topActionBtnText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#D4AF37',
+    letterSpacing: 1.5,
+  },
   listContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 130,
+  },
+  posIconBadge: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#0A1128',
+    borderRightWidth: 2,
+    borderRightColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  posIconText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#D4AF37',
   },
   emptySection: {
     flex: 1,
