@@ -19,6 +19,7 @@ import {
   createPosition,
   updatePosition,
   deletePosition,
+  ensureStandardPositions,
 } from '@/src/services/positionService';
 import {
   listPlaystyles,
@@ -32,6 +33,7 @@ import {
   updateFormation,
   deleteFormation,
   duplicateFormation,
+  FC26_PRESET_TEMPLATES,
   type FormationWithSlots,
   type SlotInput,
 } from '@/src/services/formationService';
@@ -277,75 +279,34 @@ export default function FormationsScreen() {
     );
   }
 
-  // Load Preset
+  // Load Preset from FC 26 Presets
   function applyPreset(presetName: string) {
+    const template = FC26_PRESET_TEMPLATES.find((t) => t.name === presetName);
+    if (!template) return;
+
     const posMap = new Map<string, string>();
     for (const p of positions) {
       posMap.set(p.nama.toUpperCase(), p.id);
     }
 
-    const findPos = (name: string) =>
-      posMap.get(name.toUpperCase()) ?? positions[0]?.id ?? '';
+    const findPos = (name: string) => {
+      const u = name.toUpperCase();
+      if (posMap.has(u)) return posMap.get(u)!;
+      if (u === 'LWB') return posMap.get('LB') ?? positions[0]?.id ?? '';
+      if (u === 'RWB') return posMap.get('RB') ?? positions[0]?.id ?? '';
+      if (u === 'CAM') return posMap.get('CM') ?? positions[0]?.id ?? '';
+      if (u === 'CF' || u === 'LF' || u === 'RF') return posMap.get('ST') ?? positions[0]?.id ?? '';
+      if (u === 'LM') return posMap.get('LW') ?? positions[0]?.id ?? '';
+      if (u === 'RM') return posMap.get('RW') ?? positions[0]?.id ?? '';
+      return positions[0]?.id ?? '';
+    };
 
-    let newSlots: SlotInput[] = [];
-
-    if (presetName === '4-3-3 Flat') {
-      newSlots = [
-        { position_id: findPos('GK'), slot_label: 'GK', coord_x: 50, coord_y: 8 },
-        { position_id: findPos('LB'), slot_label: 'LB', coord_x: 15, coord_y: 28 },
-        { position_id: findPos('CB'), slot_label: 'CB1', coord_x: 38, coord_y: 24 },
-        { position_id: findPos('CB'), slot_label: 'CB2', coord_x: 62, coord_y: 24 },
-        { position_id: findPos('RB'), slot_label: 'RB', coord_x: 85, coord_y: 28 },
-        { position_id: findPos('CDM'), slot_label: 'CDM', coord_x: 50, coord_y: 46 },
-        { position_id: findPos('CM'), slot_label: 'CM1', coord_x: 32, coord_y: 60 },
-        { position_id: findPos('CM'), slot_label: 'CM2', coord_x: 68, coord_y: 60 },
-        { position_id: findPos('LW'), slot_label: 'LW', coord_x: 18, coord_y: 82 },
-        { position_id: findPos('ST'), slot_label: 'ST', coord_x: 50, coord_y: 88 },
-        { position_id: findPos('RW'), slot_label: 'RW', coord_x: 82, coord_y: 82 },
-      ];
-    } else if (presetName === '4-2-3-1') {
-      newSlots = [
-        { position_id: findPos('GK'), slot_label: 'GK', coord_x: 50, coord_y: 8 },
-        { position_id: findPos('LB'), slot_label: 'LB', coord_x: 15, coord_y: 28 },
-        { position_id: findPos('CB'), slot_label: 'CB1', coord_x: 38, coord_y: 24 },
-        { position_id: findPos('CB'), slot_label: 'CB2', coord_x: 62, coord_y: 24 },
-        { position_id: findPos('RB'), slot_label: 'RB', coord_x: 85, coord_y: 28 },
-        { position_id: findPos('CDM'), slot_label: 'CDM1', coord_x: 36, coord_y: 45 },
-        { position_id: findPos('CDM'), slot_label: 'CDM2', coord_x: 64, coord_y: 45 },
-        { position_id: findPos('CAM') || findPos('CM'), slot_label: 'CAM', coord_x: 50, coord_y: 68 },
-        { position_id: findPos('LM') || findPos('LW'), slot_label: 'LM', coord_x: 20, coord_y: 68 },
-        { position_id: findPos('RM') || findPos('RW'), slot_label: 'RM', coord_x: 80, coord_y: 68 },
-        { position_id: findPos('ST'), slot_label: 'ST', coord_x: 50, coord_y: 88 },
-      ];
-    } else if (presetName === '4-4-2') {
-      newSlots = [
-        { position_id: findPos('GK'), slot_label: 'GK', coord_x: 50, coord_y: 8 },
-        { position_id: findPos('LB'), slot_label: 'LB', coord_x: 15, coord_y: 28 },
-        { position_id: findPos('CB'), slot_label: 'CB1', coord_x: 38, coord_y: 24 },
-        { position_id: findPos('CB'), slot_label: 'CB2', coord_x: 62, coord_y: 24 },
-        { position_id: findPos('RB'), slot_label: 'RB', coord_x: 85, coord_y: 28 },
-        { position_id: findPos('LM') || findPos('LW'), slot_label: 'LM', coord_x: 18, coord_y: 56 },
-        { position_id: findPos('CM'), slot_label: 'CM1', coord_x: 38, coord_y: 54 },
-        { position_id: findPos('CM'), slot_label: 'CM2', coord_x: 62, coord_y: 54 },
-        { position_id: findPos('RM') || findPos('RW'), slot_label: 'RM', coord_x: 82, coord_y: 56 },
-        { position_id: findPos('ST'), slot_label: 'ST1', coord_x: 38, coord_y: 86 },
-        { position_id: findPos('ST'), slot_label: 'ST2', coord_x: 62, coord_y: 86 },
-      ];
-    } else if (presetName === '3-5-2') {
-      newSlots = [
-        { position_id: findPos('GK'), slot_label: 'GK', coord_x: 50, coord_y: 8 },
-        { position_id: findPos('CB'), slot_label: 'LCB', coord_x: 25, coord_y: 26 },
-        { position_id: findPos('CB'), slot_label: 'CB', coord_x: 50, coord_y: 24 },
-        { position_id: findPos('CB'), slot_label: 'RCB', coord_x: 75, coord_y: 26 },
-        { position_id: findPos('CDM'), slot_label: 'CDM1', coord_x: 36, coord_y: 44 },
-        { position_id: findPos('CDM'), slot_label: 'CDM2', coord_x: 64, coord_y: 44 },
-        { position_id: findPos('LM') || findPos('LW'), slot_label: 'LM', coord_x: 14, coord_y: 58 },
-        { position_id: findPos('CAM') || findPos('CM'), slot_label: 'CAM', coord_x: 50, coord_y: 66 },
-        { position_id: findPos('RM') || findPos('RW'), slot_label: 'RM', coord_x: 86, coord_y: 58 },
-        { position_id: findPos('ST'), slot_label: 'ST1', coord_x: 38, coord_y: 86 },
-        { position_id: findPos('ST'), slot_label: 'ST2', coord_x: 62, coord_y: 86 },
-      ];
-    }
+    const newSlots: SlotInput[] = template.slots.map((s) => ({
+      position_id: findPos(s.pos),
+      slot_label: s.label,
+      coord_x: s.x,
+      coord_y: s.y,
+    }));
 
     setBuilderName(presetName);
     setBuilderSlots(newSlots);
@@ -536,6 +497,20 @@ export default function FormationsScreen() {
             <TouchableOpacity style={styles.topActionBtn} onPress={openAddPosition} activeOpacity={0.8}>
               <Text style={styles.topActionBtnText}>+ TAMBAH POSISI BARU</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.topActionBtn, { backgroundColor: '#F0F4FF', marginTop: 6 }]}
+              onPress={async () => {
+                if (!activeProfile) return;
+                await ensureStandardPositions(activeProfile.id);
+                loadData();
+                Alert.alert('Sukses 🎉', 'Semua 17 posisi standar FC 26 telah dipastikan ada di profil ini!');
+              }}
+              activeOpacity={0.8}>
+              <Text style={[styles.topActionBtnText, { color: '#0A1128' }]}>
+                ⚡ Lengkapi 17 Posisi FC 26
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {posLoading ? (
@@ -628,14 +603,23 @@ export default function FormationsScreen() {
 
             {/* Presets Row */}
             <View style={styles.presetBar}>
-              <Text style={styles.presetLabel}>PRESET:</Text>
+              <Text style={styles.presetLabel}>PRESET FC 26:</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                {['4-3-3 Flat', '4-2-3-1', '4-4-2', '3-5-2'].map((pName) => (
+                {FC26_PRESET_TEMPLATES.map((tmpl) => (
                   <TouchableOpacity
-                    key={pName}
-                    style={styles.presetChip}
-                    onPress={() => applyPreset(pName)}>
-                    <Text style={styles.presetChipText}>{pName}</Text>
+                    key={tmpl.name}
+                    style={[
+                      styles.presetChip,
+                      builderName === tmpl.name && { backgroundColor: '#0A1128', borderColor: '#D4AF37' },
+                    ]}
+                    onPress={() => applyPreset(tmpl.name)}>
+                    <Text
+                      style={[
+                        styles.presetChipText,
+                        builderName === tmpl.name && { color: '#D4AF37' },
+                      ]}>
+                      {tmpl.name}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>

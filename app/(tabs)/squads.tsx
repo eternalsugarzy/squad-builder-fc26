@@ -26,6 +26,8 @@ import {
   removePlayerFromBench,
   clearEntireSquad,
   renameSquad,
+  createCustomSquad,
+  deleteSquad,
   type SquadFull,
 } from '@/src/services/squadService';
 import { listFormations, type FormationWithSlots } from '@/src/services/formationService';
@@ -84,6 +86,11 @@ export default function SquadsScreen() {
   // Rename Squad State
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [newSquadName, setNewSquadName] = useState('');
+
+  // Create Custom Squad State
+  const [showCreateSquadModal, setShowCreateSquadModal] = useState(false);
+  const [createSquadName, setCreateSquadName] = useState('');
+  const [createSquadFormationId, setCreateSquadFormationId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!activeProfile) return;
@@ -224,6 +231,55 @@ export default function SquadsScreen() {
     } catch (e) {
       Alert.alert('Error', 'Gagal mengganti nama tim');
     }
+  }
+
+  async function handleCreateNewSquad() {
+    if (!activeProfile) return;
+    const trimmed = createSquadName.trim();
+    if (!trimmed) {
+      Alert.alert('Error', 'Nama tim tidak boleh kosong');
+      return;
+    }
+    try {
+      const formId = createSquadFormationId || (formations[0]?.id ?? null);
+      const newSqId = await createCustomSquad(activeProfile.id, trimmed, formId, null);
+      setShowCreateSquadModal(false);
+      setCreateSquadName('');
+      setCreateSquadFormationId(null);
+      await loadData();
+      // Switch active tier to the newly created squad
+      const updatedSquads = await listSquadsWithDetails(activeProfile.id);
+      const newSq = updatedSquads.find((s) => s.id === newSqId);
+      if (newSq) {
+        setActiveTier(newSq.tier_order);
+      }
+      Alert.alert('Sukses 🎉', `Squad "${trimmed}" berhasil dibuat! Anda dapat menyusun pemain secara manual.`);
+    } catch (e) {
+      Alert.alert('Error', 'Gagal membuat squad baru');
+    }
+  }
+
+  function handleDeleteCustomSquad(sq: SquadFull) {
+    Alert.alert(
+      'Hapus Squad',
+      `Yakin ingin menghapus squad "${sq.nama_tim}"?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteSquad(sq.id);
+              setActiveTier(1);
+              await loadData();
+            } catch (e) {
+              Alert.alert('Error', 'Gagal menghapus squad');
+            }
+          },
+        },
+      ]
+    );
   }
 
   // ─── Slot Tap Handling ─────────────────────────
@@ -401,29 +457,44 @@ export default function SquadsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ─── Top Squad Tier Tabs (Tim 1 - 4) ──────── */}
-      <View style={styles.tierTabBar}>
-        {[1, 2, 3, 4].map((tier) => {
-          const sq = squads.find((s) => s.tier_order === tier);
-          const isActive = activeTier === tier;
+      {/* ─── Top Squad Tier Tabs (Tim 1 - N & Custom) ──────── */}
+      <View style={styles.tierTabBarWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tierTabBar}>
+          {squads.map((sq) => {
+            const isActive = activeTier === sq.tier_order;
 
-          return (
-            <TouchableOpacity
-              key={tier}
-              style={[styles.tierTab, isActive && styles.tierTabActive]}
-              onPress={() => {
-                setActiveTier(tier);
-                setSwapSource(null);
-              }}>
-              <Text style={[styles.tierTabText, isActive && styles.tierTabTextActive]}>
-                TIM {tier}
-              </Text>
-              <Text style={[styles.tierOvrText, isActive && styles.tierOvrTextActive]}>
-                {sq?.avg_ovr ? `AVG ${sq.avg_ovr}` : '-'}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+            return (
+              <TouchableOpacity
+                key={sq.id}
+                style={[styles.tierTab, isActive && styles.tierTabActive]}
+                onPress={() => {
+                  setActiveTier(sq.tier_order);
+                  setSwapSource(null);
+                }}>
+                <Text style={[styles.tierTabText, isActive && styles.tierTabTextActive]}>
+                  {sq.tier_order <= 4 ? `TIM ${sq.tier_order}` : sq.nama_tim.slice(0, 8)}
+                </Text>
+                <Text style={[styles.tierOvrText, isActive && styles.tierOvrTextActive]}>
+                  {sq?.avg_ovr ? `AVG ${sq.avg_ovr}` : '-'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+
+          {/* Add Squad Button */}
+          <TouchableOpacity
+            style={styles.addSquadTabBtn}
+            onPress={() => {
+              setCreateSquadName(`Tim ${squads.length + 1}`);
+              setCreateSquadFormationId(formations[0]?.id ?? null);
+              setShowCreateSquadModal(true);
+            }}>
+            <Text style={styles.addSquadTabBtnText}>+ TIM BARU</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {/* ─── Squad Name & Rename Bar ──────────────── */}
@@ -436,14 +507,25 @@ export default function SquadsScreen() {
             {currentSquad.avg_ovr ? `Rating Tim: ${currentSquad.avg_ovr}` : 'Belum disusun'}
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.renameBtn}
-          onPress={() => {
-            setNewSquadName(currentSquad.nama_tim);
-            setShowRenameModal(true);
-          }}>
-          <Text style={styles.renameBtnText}>✏️ GANTI NAMA</Text>
-        </TouchableOpacity>
+
+        <View style={styles.squadNameActions}>
+          <TouchableOpacity
+            style={styles.renameBtn}
+            onPress={() => {
+              setNewSquadName(currentSquad.nama_tim);
+              setShowRenameModal(true);
+            }}>
+            <Text style={styles.renameBtnText}>✏️ GANTI NAMA</Text>
+          </TouchableOpacity>
+
+          {currentSquad.tier_order > 4 && (
+            <TouchableOpacity
+              style={[styles.renameBtn, { backgroundColor: '#FEE', borderColor: '#C5221F', marginLeft: 6 }]}
+              onPress={() => handleDeleteCustomSquad(currentSquad)}>
+              <Text style={[styles.renameBtnText, { color: '#C5221F' }]}>🗑️ HAPUS</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* ─── Active Swap Banner ───────────────────── */}
@@ -862,6 +944,70 @@ export default function SquadsScreen() {
           </KeyboardAvoidingView>
         </Pressable>
       </Modal>
+
+      {/* ─── CREATE SQUAD MODAL ──────────────────── */}
+      <Modal
+        visible={showCreateSquadModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCreateSquadModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowCreateSquadModal(false)}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalCenter}>
+            <Pressable style={styles.renameModalCard} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.modalTitle}>BUAT SQUAD / TIM BARU</Text>
+
+              <Text style={styles.inputLabel}>NAMA TIM / SQUAD</Text>
+              <TextInput
+                style={styles.renameInput}
+                placeholder="Misal: Tim 5 (Rotasi Cup) / Final UCL"
+                placeholderTextColor="#999"
+                value={createSquadName}
+                onChangeText={setCreateSquadName}
+                autoFocus
+                maxLength={40}
+              />
+
+              <Text style={styles.inputLabel}>PILIH FORMASI AWAL</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {formations.map((f) => (
+                    <TouchableOpacity
+                      key={f.id}
+                      style={[
+                        styles.formPickChip,
+                        createSquadFormationId === f.id && styles.formPickChipActive,
+                      ]}
+                      onPress={() => setCreateSquadFormationId(f.id)}>
+                      <Text
+                        style={[
+                          styles.formPickChipText,
+                          createSquadFormationId === f.id && styles.formPickChipTextActive,
+                        ]}>
+                        {f.nama_formasi}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+
+              <View style={styles.renameActions}>
+                <TouchableOpacity
+                  style={styles.renameCancelBtn}
+                  onPress={() => setShowCreateSquadModal(false)}>
+                  <Text style={styles.renameCancelText}>BATAL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.renameConfirmBtn}
+                  onPress={handleCreateNewSquad}>
+                  <Text style={styles.renameConfirmText}>BUAT TIM</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -904,25 +1050,29 @@ const styles = StyleSheet.create({
   },
 
   // Tier Tab Bar
-  tierTabBar: {
-    flexDirection: 'row',
+  tierTabBarWrapper: {
     borderBottomWidth: 3,
     borderBottomColor: '#000',
     backgroundColor: '#FAFAFA',
   },
+  tierTabBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   tierTab: {
-    flex: 1,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     alignItems: 'center',
     borderRightWidth: 1,
     borderRightColor: '#DDD',
     backgroundColor: '#F0F0F0',
+    minWidth: 90,
   },
   tierTabActive: {
     backgroundColor: '#0A1128',
   },
   tierTabText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '900',
     color: '#666',
     letterSpacing: 1,
@@ -938,6 +1088,21 @@ const styles = StyleSheet.create({
   },
   tierOvrTextActive: {
     color: '#D4AF37',
+  },
+  addSquadTabBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#D4AF37',
+    borderLeftWidth: 2,
+    borderLeftColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addSquadTabBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 0.5,
   },
 
   // Swap Banner
@@ -1337,6 +1502,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 1,
   },
+  squadNameActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   renameBtn: {
     borderWidth: 1.5,
     borderColor: '#000',
@@ -1348,6 +1517,33 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#0A1128',
+  },
+  inputLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#0A1128',
+    letterSpacing: 1,
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  formPickChip: {
+    borderWidth: 1.5,
+    borderColor: '#000',
+    backgroundColor: '#FAFAFA',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  formPickChipActive: {
+    backgroundColor: '#0A1128',
+    borderColor: '#0A1128',
+  },
+  formPickChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0A1128',
+  },
+  formPickChipTextActive: {
+    color: '#D4AF37',
   },
   manualTipBanner: {
     backgroundColor: '#F0F4FF',

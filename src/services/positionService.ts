@@ -56,6 +56,44 @@ export async function deletePosition(id: string): Promise<void> {
 }
 
 /**
+ * Standard complete FC 26 football positions.
+ */
+export const ALL_FC26_POSITIONS = [
+  'GK',
+  'LB',
+  'LWB',
+  'CB',
+  'RB',
+  'RWB',
+  'CDM',
+  'CM',
+  'CAM',
+  'LM',
+  'RM',
+  'LW',
+  'RW',
+  'LF',
+  'RF',
+  'CF',
+  'ST',
+];
+
+/**
+ * Ensure all standard FC 26 positions exist in the given profile.
+ */
+export async function ensureStandardPositions(profileId: string): Promise<void> {
+  const existing = await listPositions(profileId);
+  const existingNames = new Set(existing.map((p) => p.nama.toUpperCase()));
+
+  for (let i = 0; i < ALL_FC26_POSITIONS.length; i++) {
+    const posName = ALL_FC26_POSITIONS[i];
+    if (!existingNames.has(posName)) {
+      await createPosition(profileId, posName);
+    }
+  }
+}
+
+/**
  * Reorder positions by updating sort_order for each.
  */
 export async function reorderPositions(orderedIds: string[]): Promise<void> {

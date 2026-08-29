@@ -578,10 +578,10 @@ export default function PlayersScreen() {
         />
       )}
 
-      {/* Floating Add Player Button */}
+      {/* Floating Add Player Button (Round Plus) */}
       {!isBulkMode && (
         <TouchableOpacity style={styles.fabAdd} onPress={openAdd} activeOpacity={0.8}>
-          <Text style={styles.fabAddText}>+ TAMBAH PEMAIN</Text>
+          <Text style={styles.fabAddIcon}>+</Text>
         </TouchableOpacity>
       )}
 
@@ -1278,28 +1278,33 @@ const styles = StyleSheet.create({
     color: '#0A1128',
   },
 
-  // Floating Button
+  // Floating Button (Circular Plus)
   fabAdd: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 96 : 76,
-    left: 20,
     right: 20,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: '#0A1128',
-    paddingVertical: 14,
+    justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#000',
     shadowColor: '#000',
-    shadowOffset: { width: 4, height: 4 },
+    shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 0,
-    elevation: 4,
+    elevation: 6,
+    zIndex: 99,
   },
-  fabAddText: {
-    fontSize: 14,
+  fabAddIcon: {
+    fontSize: 34,
     fontWeight: '900',
-    color: '#FFF',
-    letterSpacing: 2,
+    color: '#D4AF37',
+    marginTop: -3,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
 
   // Modal

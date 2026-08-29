@@ -356,3 +356,51 @@ export async function clearEntireSquad(squadId: string): Promise<void> {
   await db.runAsync('DELETE FROM squad_bench WHERE squad_id = ?', squadId);
 }
 
+/**
+ * Create a new custom squad (Tim 5, Tim 6, Tim 7, etc. or custom named).
+ */
+export async function createCustomSquad(
+  profileId: string,
+  namaTim: string,
+  formationId?: string | null,
+  playstyleId?: string | null
+): Promise<string> {
+  const db = await getDatabase();
+  const id = generateId();
+
+  // Find max tier_order
+  const maxRow = await db.getFirstAsync<{ max_tier: number | null }>(
+    'SELECT MAX(tier_order) as max_tier FROM squads WHERE profile_id = ?',
+    profileId
+  );
+  const nextTier = (maxRow?.max_tier ?? 4) + 1;
+
+  await db.runAsync(
+    'INSERT INTO squads (id, profile_id, nama_tim, formation_id, playstyle_id, tier_order) VALUES (?, ?, ?, ?, ?, ?)',
+    id,
+    profileId,
+    namaTim.trim(),
+    formationId ?? null,
+    playstyleId ?? null,
+    nextTier
+  );
+
+  // If formation provided, initialize starter slots
+  if (formationId) {
+    await setSquadFormation(id, formationId);
+  }
+
+  return id;
+}
+
+/**
+ * Delete a custom squad.
+ */
+export async function deleteSquad(squadId: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync('DELETE FROM squad_slots WHERE squad_id = ?', squadId);
+  await db.runAsync('DELETE FROM squad_bench WHERE squad_id = ?', squadId);
+  await db.runAsync('DELETE FROM squads WHERE id = ?', squadId);
+}
+
+

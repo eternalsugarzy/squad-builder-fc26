@@ -46,8 +46,26 @@ export async function seedProfile1(): Promise<string> {
     'Tekanan tinggi konstan pada area lawan'
   );
 
-  // 3. Positions (10 positions)
-  const posNames = ['GK', 'LB', 'CB', 'RB', 'CDM', 'CM', 'LW', 'RW', 'RM', 'ST'];
+  // 3. Positions (17 standard FC 26 positions)
+  const posNames = [
+    'GK',
+    'LB',
+    'LWB',
+    'CB',
+    'RB',
+    'RWB',
+    'CDM',
+    'CM',
+    'CAM',
+    'LM',
+    'RM',
+    'LW',
+    'RW',
+    'LF',
+    'RF',
+    'CF',
+    'ST',
+  ];
   const posMap = new Map<string, string>(); // name -> id
 
   for (let i = 0; i < posNames.length; i++) {

@@ -248,8 +248,8 @@ export default function HomeScreen() {
         {/* ─── Watchlist Summary ───────────────────── */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>TRANSFER WATCHLIST</Text>
-          <TouchableOpacity onPress={() => router.push('/watchlist' as any)}>
-            <Text style={styles.seeAllText}>Kelola Watchlist ➔</Text>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/profile' as any)}>
+            <Text style={styles.seeAllText}>Kelola di Profil ➔</Text>
           </TouchableOpacity>
         </View>
 
@@ -258,7 +258,7 @@ export default function HomeScreen() {
             <Text style={styles.emptyWatchText}>Belum ada target transfer</Text>
             <TouchableOpacity
               style={styles.addWatchBtn}
-              onPress={() => router.push('/watchlist' as any)}>
+              onPress={() => router.push('/(tabs)/profile' as any)}>
               <Text style={styles.addWatchBtnText}>+ TAMBAH TARGET</Text>
             </TouchableOpacity>
           </View>
@@ -267,7 +267,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               key={w.id}
               style={styles.watchItem}
-              onPress={() => router.push('/watchlist' as any)}
+              onPress={() => router.push('/(tabs)/profile' as any)}
               activeOpacity={0.8}>
               <View style={styles.watchPosBox}>
                 <Text style={styles.watchPosText}>{w.position_nama}</Text>
