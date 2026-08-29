@@ -12,8 +12,14 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { useProfile } from '@/src/contexts/ProfileContext';
+import {
+  exportProfileToJson,
+  importProfileFromJson,
+  formatTeamSheetsText,
+} from '@/src/services/exportService';
 import type { Profile } from '@/src/types';
 
 export default function ProfileScreen() {
@@ -25,6 +31,7 @@ export default function ProfileScreen() {
     addProfile,
     editProfileName,
     removeProfile,
+    refresh,
   } = useProfile();
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -32,6 +39,15 @@ export default function ProfileScreen() {
   const [newName, setNewName] = useState('');
   const [renameTarget, setRenameTarget] = useState<Profile | null>(null);
   const [renameName, setRenameName] = useState('');
+
+  // Export / Import Modals
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportContent, setExportContent] = useState('');
+  const [exportTitle, setExportTitle] = useState('');
+
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importJsonText, setImportJsonText] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
 
   if (loading) {
     return (
@@ -54,7 +70,6 @@ export default function ProfileScreen() {
       setShowAddModal(false);
     } catch (error) {
       Alert.alert('Error', 'Gagal membuat profil');
-      console.error(error);
     }
   }
 
@@ -72,7 +87,6 @@ export default function ProfileScreen() {
       setShowRenameModal(false);
     } catch (error) {
       Alert.alert('Error', 'Gagal mengganti nama profil');
-      console.error(error);
     }
   }
 
@@ -90,7 +104,6 @@ export default function ProfileScreen() {
               await removeProfile(profile.id);
             } catch (error) {
               Alert.alert('Error', 'Gagal menghapus profil');
-              console.error(error);
             }
           },
         },
@@ -102,6 +115,51 @@ export default function ProfileScreen() {
     setRenameTarget(profile);
     setRenameName(profile.nama_save);
     setShowRenameModal(true);
+  }
+
+  async function handleExportJson() {
+    if (!activeProfile) return;
+    try {
+      const json = await exportProfileToJson(activeProfile.id);
+      setExportTitle('EXPORT JSON PROFIL');
+      setExportContent(json);
+      setShowExportModal(true);
+    } catch (e) {
+      Alert.alert('Error', 'Gagal mengekspor profil ke JSON');
+    }
+  }
+
+  async function handleExportTeamSheetsText() {
+    if (!activeProfile) return;
+    try {
+      const text = await formatTeamSheetsText(activeProfile.id);
+      setExportTitle('EXPORT TEAM SHEETS (TEXT)');
+      setExportContent(text);
+      setShowExportModal(true);
+    } catch (e) {
+      Alert.alert('Error', 'Gagal mengekspor Team Sheets');
+    }
+  }
+
+  async function handleExecuteImport() {
+    const trimmed = importJsonText.trim();
+    if (!trimmed) {
+      Alert.alert('Error', 'Paste teks JSON profil terlebih dahulu');
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      await importProfileFromJson(trimmed);
+      Alert.alert('Sukses 🎉', 'Profil berhasil diimpor!');
+      setImportJsonText('');
+      setShowImportModal(false);
+      await refresh();
+    } catch (e: any) {
+      Alert.alert('Error Import', e.message ?? 'Format JSON tidak valid');
+    } finally {
+      setIsImporting(false);
+    }
   }
 
   function renderProfileItem({ item }: { item: Profile }) {
@@ -156,39 +214,62 @@ export default function ProfileScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>PROFIL SAVE</Text>
         <Text style={styles.headerSubtitle}>
-          {profiles.length} profil tersimpan
+          {profiles.length} profil tersimpan • Multi-profile terisolasi
         </Text>
       </View>
 
-      {/* Profile list */}
-      {profiles.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>📂</Text>
-          <Text style={styles.emptyTitle}>Belum Ada Profil</Text>
-          <Text style={styles.emptyHint}>
-            Buat profil baru untuk memulai Career Mode Manager
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={profiles}
-          renderItem={renderProfileItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* Profile list */}
+        {profiles.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>📂</Text>
+            <Text style={styles.emptyTitle}>Belum Ada Profil</Text>
+            <Text style={styles.emptyHint}>
+              Buat profil baru untuk memulai Career Mode Manager
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.listWrapper}>
+            {profiles.map((p) => (
+              <React.Fragment key={p.id}>{renderProfileItem({ item: p })}</React.Fragment>
+            ))}
+          </View>
+        )}
 
-      {/* Add button */}
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => {
-          setNewName('');
-          setShowAddModal(true);
-        }}
-        activeOpacity={0.8}>
-        <Text style={styles.addButtonText}>+ BUAT PROFIL BARU</Text>
-      </TouchableOpacity>
+        {/* Add Profile Button */}
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => {
+            setNewName('');
+            setShowAddModal(true);
+          }}
+          activeOpacity={0.8}>
+          <Text style={styles.addButtonText}>+ BUAT PROFIL BARU</Text>
+        </TouchableOpacity>
+
+        {/* Export / Import Tools Section */}
+        {activeProfile && (
+          <View style={styles.toolsCard}>
+            <Text style={styles.toolsTitle}>BACKUP & EKSPOR ({activeProfile.nama_save})</Text>
+
+            <TouchableOpacity style={styles.toolBtn} onPress={handleExportTeamSheetsText}>
+              <Text style={styles.toolBtnText}>📋 Ekspor Team Sheets (Format Teks)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.toolBtn} onPress={handleExportJson}>
+              <Text style={styles.toolBtnText}>💾 Backup Profil Ini (JSON)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.toolBtn, styles.toolBtnImport]}
+              onPress={() => setShowImportModal(true)}>
+              <Text style={[styles.toolBtnText, { color: '#0A1128' }]}>
+                📥 Impor Profil dari JSON
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </ScrollView>
 
       {/* Add Modal */}
       <Modal
@@ -219,9 +300,7 @@ export default function ProfileScreen() {
                   onPress={() => setShowAddModal(false)}>
                   <Text style={styles.modalCancelText}>BATAL</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.modalConfirmBtn}
-                  onPress={handleAdd}>
+                <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleAdd}>
                   <Text style={styles.modalConfirmText}>BUAT</Text>
                 </TouchableOpacity>
               </View>
@@ -259,10 +338,78 @@ export default function ProfileScreen() {
                   onPress={() => setShowRenameModal(false)}>
                   <Text style={styles.modalCancelText}>BATAL</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.modalConfirmBtn}
-                  onPress={handleRename}>
+                <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleRename}>
                   <Text style={styles.modalConfirmText}>SIMPAN</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* Export Display Modal */}
+      <Modal
+        visible={showExportModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowExportModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowExportModal(false)}>
+          <View style={styles.exportModalCard} onStartShouldSetResponder={() => true}>
+            <Text style={styles.modalTitle}>{exportTitle}</Text>
+            <ScrollView style={styles.exportTextBox} showsVerticalScrollIndicator>
+              <TextInput
+                style={styles.exportTextInput}
+                value={exportContent}
+                multiline
+                editable={false}
+                selectTextOnFocus
+              />
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.modalConfirmBtn}
+              onPress={() => setShowExportModal(false)}>
+              <Text style={styles.modalConfirmText}>TUTUP</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Import Modal */}
+      <Modal
+        visible={showImportModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowImportModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowImportModal(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalCenter}>
+            <Pressable style={styles.exportModalCard} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.modalTitle}>IMPOR PROFIL (JSON)</Text>
+              <Text style={styles.importHint}>
+                Paste seluruh isi teks JSON cadangan profil di bawah ini:
+              </Text>
+              <TextInput
+                style={styles.importInput}
+                placeholder='Paste JSON di sini (misal: {"version": 1, ...})'
+                placeholderTextColor="#999"
+                value={importJsonText}
+                onChangeText={setImportJsonText}
+                multiline
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setShowImportModal(false)}>
+                  <Text style={styles.modalCancelText}>BATAL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalConfirmBtn, isImporting && { opacity: 0.6 }]}
+                  disabled={isImporting}
+                  onPress={handleExecuteImport}>
+                  <Text style={styles.modalConfirmText}>
+                    {isImporting ? 'MENGIMPOR...' : 'IMPOR SEKARANG'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </Pressable>
@@ -311,10 +458,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // List
-  listContent: {
+  scrollContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 40,
+  },
+  listWrapper: {
+    marginBottom: 12,
   },
 
   // Profile card
@@ -325,7 +474,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#000',
     marginBottom: 12,
-    padding: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   profileCardActive: {
     borderColor: '#0A1128',
@@ -334,7 +487,7 @@ const styles = StyleSheet.create({
   },
   profileMain: {
     flex: 1,
-    padding: 16,
+    padding: 14,
   },
   profileInfo: {
     flex: 1,
@@ -345,7 +498,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   profileName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0A1128',
   },
@@ -356,17 +509,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#D4AF37',
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#000',
   },
   activeBadgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '900',
     color: '#000',
     letterSpacing: 1,
   },
   profileDate: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#888',
     marginTop: 4,
   },
@@ -376,23 +529,21 @@ const styles = StyleSheet.create({
     borderLeftColor: '#000',
   },
   actionBtn: {
-    padding: 16,
+    padding: 14,
     justifyContent: 'center',
     alignItems: 'center',
     borderLeftWidth: 1,
     borderLeftColor: '#DDD',
   },
   actionBtnText: {
-    fontSize: 18,
+    fontSize: 16,
   },
   deleteBtn: {},
 
   // Empty state
   emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 40,
+    alignItems: 'center',
   },
   emptyIcon: {
     fontSize: 48,
@@ -412,29 +563,63 @@ const styles = StyleSheet.create({
 
   // Add button
   addButton: {
-    position: 'absolute',
-    bottom: 24,
-    left: 20,
-    right: 20,
     backgroundColor: '#0A1128',
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#000',
     shadowColor: '#000',
-    shadowOffset: { width: 4, height: 4 },
+    shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 0,
-    elevation: 4,
+    elevation: 3,
+    marginBottom: 20,
   },
   addButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 2,
   },
 
-  // Modal
+  // Tools Card
+  toolsCard: {
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#FAFAFA',
+    padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  toolsTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#0A1128',
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  toolBtn: {
+    borderWidth: 1.5,
+    borderColor: '#000',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFF',
+    marginBottom: 8,
+  },
+  toolBtnImport: {
+    backgroundColor: '#D4AF37',
+    marginBottom: 0,
+  },
+  toolBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0A1128',
+  },
+
+  // Modals
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -449,7 +634,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 3,
     borderColor: '#000',
-    padding: 24,
+    padding: 20,
     width: '85%',
     maxWidth: 400,
     shadowColor: '#000',
@@ -458,22 +643,65 @@ const styles = StyleSheet.create({
     shadowRadius: 0,
     elevation: 8,
   },
+  exportModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: '#000',
+    padding: 18,
+    width: '90%',
+    maxWidth: 440,
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 8,
+  },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '900',
     color: '#0A1128',
-    letterSpacing: 2,
-    marginBottom: 16,
+    letterSpacing: 1,
+    marginBottom: 12,
   },
   modalInput: {
     borderWidth: 2,
     borderColor: '#000',
-    padding: 12,
-    fontSize: 16,
+    padding: 10,
+    fontSize: 15,
     fontWeight: '600',
     color: '#0A1128',
     backgroundColor: '#FAFAFA',
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  exportTextBox: {
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#FAFAFA',
+    maxHeight: 320,
+    padding: 10,
+    marginBottom: 12,
+  },
+  exportTextInput: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 11,
+    color: '#0A1128',
+  },
+  importHint: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+  },
+  importInput: {
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#FAFAFA',
+    height: 180,
+    padding: 10,
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    textAlignVertical: 'top',
+    marginBottom: 12,
   },
   modalActions: {
     flexDirection: 'row',
@@ -488,10 +716,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F0F0',
   },
   modalCancelText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#333',
-    letterSpacing: 1,
   },
   modalConfirmBtn: {
     flex: 1,
@@ -502,9 +729,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#D4AF37',
   },
   modalConfirmText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#000',
-    letterSpacing: 1,
   },
 });

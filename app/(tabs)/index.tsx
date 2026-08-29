@@ -18,6 +18,7 @@ import {
   type DashboardData,
 } from '@/src/services/dashboardService';
 import { checkExpiredStatusPlayers } from '@/src/services/notificationService';
+import { ComparisonChart } from '@/src/components/ComparisonChart';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -169,6 +170,13 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* ─── Team OVR Bar Chart ──────────────────── */}
+        {d?.squads && d.squads.length > 0 && (
+          <View style={{ marginBottom: 16 }}>
+            <ComparisonChart squads={d.squads} />
+          </View>
+        )}
 
         {/* ─── Position Quota Alert (On-The-Fly) ───── */}
         <View style={styles.quotaCard}>
