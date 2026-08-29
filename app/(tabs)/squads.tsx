@@ -26,6 +26,11 @@ import {
 import { listFormations, type FormationWithSlots } from '@/src/services/formationService';
 import { listPlaystyles } from '@/src/services/playstyleService';
 import { listPlayers } from '@/src/services/playerService';
+import {
+  validatePlayerPool,
+  autoGenerateTeamSheets,
+  type PoolValidationWarning,
+} from '@/src/services/autoGenerateService';
 import { PitchCanvas, type PitchSlotItem } from '@/src/components/PitchCanvas';
 import { PlayerPickerModal } from '@/src/components/PlayerPickerModal';
 import type {
@@ -51,6 +56,12 @@ export default function SquadsScreen() {
   const [playstyles, setPlaystyles] = useState<Playstyle[]>([]);
   const [allPlayers, setAllPlayers] = useState<PlayerWithPositions[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Auto-Generate State
+  const [showAutoGenerateModal, setShowAutoGenerateModal] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [validationWarnings, setValidationWarnings] = useState<PoolValidationWarning[]>([]);
 
   // Swap State
   const [swapSource, setSwapSource] = useState<SwapTarget | null>(null);
@@ -107,6 +118,41 @@ export default function SquadsScreen() {
     }
     return ids;
   }, [currentSquad]);
+
+  // ─── Auto-Generate Team Sheet ─────────────────
+  async function handleOpenAutoGenerate() {
+    if (!activeProfile) return;
+    setIsValidating(true);
+    setShowAutoGenerateModal(true);
+    try {
+      const res = await validatePlayerPool(activeProfile.id);
+      setValidationWarnings(res.warnings);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsValidating(false);
+    }
+  }
+
+  async function handleExecuteAutoGenerate() {
+    if (!activeProfile) return;
+    setIsGenerating(true);
+    try {
+      const res = await autoGenerateTeamSheets(activeProfile.id);
+      if (res.success) {
+        Alert.alert('Sukses 🎉', res.message);
+        setShowAutoGenerateModal(false);
+        await loadData();
+        setActiveTier(1);
+      } else {
+        Alert.alert('Gagal', res.message);
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Gagal generate team sheet');
+    } finally {
+      setIsGenerating(false);
+    }
+  }
 
   // ─── Formation & Playstyle Changes ─────────────
   async function handleSelectFormation(formationId: string) {
@@ -284,6 +330,16 @@ export default function SquadsScreen() {
 
   return (
     <View style={styles.container}>
+      {/* ─── Top Auto-Generate Action Bar ─────────── */}
+      <View style={styles.autoGenBanner}>
+        <TouchableOpacity
+          style={styles.autoGenBannerBtn}
+          onPress={handleOpenAutoGenerate}
+          activeOpacity={0.8}>
+          <Text style={styles.autoGenBannerBtnText}>⚡ AUTO-GENERATE TEAM SHEET</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* ─── Top Squad Tier Tabs (Tim 1 - 4) ──────── */}
       <View style={styles.tierTabBar}>
         {[1, 2, 3, 4].map((tier) => {
@@ -600,6 +656,81 @@ export default function SquadsScreen() {
               onPress={() => setShowPlaystylePicker(false)}>
               <Text style={styles.pickerCloseText}>BATAL</Text>
             </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ─── AUTO-GENERATE MODAL ─────────────────── */}
+      <Modal
+        visible={showAutoGenerateModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAutoGenerateModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowAutoGenerateModal(false)}>
+          <View style={styles.autoGenCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.autoGenHeader}>
+              <Text style={styles.autoGenTitle}>⚡ AUTO-GENERATE TEAM SHEET</Text>
+              <Text style={styles.autoGenSubtitle}>
+                Menyusun Tim 1, 2, 3 (100% unik) & Tim 4 (Hybrid) secara otomatis.
+              </Text>
+            </View>
+
+            {isValidating ? (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color="#0A1128" />
+                <Text style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                  Memvalidasi pool pemain...
+                </Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300, padding: 12 }}>
+                {validationWarnings.length > 0 ? (
+                  <View style={styles.warningBox}>
+                    <Text style={styles.warningTitle}>⚠️ PERINGATAN KEKURANGAN PEMAIN:</Text>
+                    {validationWarnings.map((w) => (
+                      <Text key={w.positionId} style={styles.warningItem}>
+                        • Posisi <Text style={{ fontWeight: '900' }}>{w.positionNama}</Text>: butuh{' '}
+                        {w.requiredCount}, hanya ada {w.availableCount} aktif (kurang {w.deficit})
+                      </Text>
+                    ))}
+                    <Text style={styles.warningNote}>
+                      Slot yang kurang akan dikosongkan atau diisi pemain dari posisi lain.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.validBox}>
+                    <Text style={styles.validText}>
+                      ✅ Pool pemain aktif cukup untuk semua formasi Tim 1-4!
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.ruleSummary}>
+                  <Text style={styles.ruleTitle}>Aturan Penyusunan:</Text>
+                  <Text style={styles.ruleItem}>1. Tim 1: Starter OVR tertinggi</Text>
+                  <Text style={styles.ruleItem}>2. Tim 2: Starter OVR berikutnya</Text>
+                  <Text style={styles.ruleItem}>3. Tim 3: Starter OVR berikutnya</Text>
+                  <Text style={styles.ruleItem}>4. Tim 4: Hybrid (min 3 perwakilan T1, T2, T3)</Text>
+                  <Text style={styles.ruleItem}>5. Cadangan: Maks 9 pemain (otomatis di-trim)</Text>
+                </View>
+              </ScrollView>
+            )}
+
+            <View style={styles.autoGenFooter}>
+              <TouchableOpacity
+                style={styles.autoGenCancelBtn}
+                onPress={() => setShowAutoGenerateModal(false)}>
+                <Text style={styles.autoGenCancelText}>BATAL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.autoGenConfirmBtn, isGenerating && { opacity: 0.6 }]}
+                disabled={isGenerating}
+                onPress={handleExecuteAutoGenerate}>
+                <Text style={styles.autoGenConfirmText}>
+                  {isGenerating ? 'MENYUSUN...' : 'GENERATE SEKARANG ⚡'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </Pressable>
       </Modal>
@@ -1005,4 +1136,149 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#666',
   },
+
+  // Auto-Generate Banner & Modal
+  autoGenBanner: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FAFAFA',
+    borderBottomWidth: 2,
+    borderBottomColor: '#000',
+  },
+  autoGenBannerBtn: {
+    backgroundColor: '#D4AF37',
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  autoGenBannerBtnText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 1.5,
+  },
+  autoGenCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: '#000',
+    width: '90%',
+    maxWidth: 420,
+    shadowColor: '#000',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 8,
+  },
+  autoGenHeader: {
+    padding: 14,
+    borderBottomWidth: 2,
+    borderBottomColor: '#000',
+    backgroundColor: '#FAFAFA',
+  },
+  autoGenTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0A1128',
+    letterSpacing: 1,
+  },
+  autoGenSubtitle: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+  },
+  warningBox: {
+    backgroundColor: '#FFFBE6',
+    borderWidth: 1.5,
+    borderColor: '#B06000',
+    padding: 10,
+    marginBottom: 10,
+  },
+  warningTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#B06000',
+    marginBottom: 6,
+  },
+  warningItem: {
+    fontSize: 11,
+    color: '#333',
+    marginBottom: 3,
+  },
+  warningNote: {
+    fontSize: 10,
+    color: '#888',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  validBox: {
+    backgroundColor: '#E6F4EA',
+    borderWidth: 1.5,
+    borderColor: '#137333',
+    padding: 10,
+    marginBottom: 10,
+  },
+  validText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#137333',
+  },
+  ruleSummary: {
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#DDD',
+    padding: 10,
+  },
+  ruleTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#0A1128',
+    marginBottom: 4,
+  },
+  ruleItem: {
+    fontSize: 10,
+    color: '#555',
+    marginBottom: 2,
+  },
+  autoGenFooter: {
+    flexDirection: 'row',
+    borderTopWidth: 2,
+    borderTopColor: '#000',
+    padding: 12,
+    gap: 8,
+    backgroundColor: '#FAFAFA',
+  },
+  autoGenCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#F0F0F0',
+  },
+  autoGenCancelText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#333',
+  },
+  autoGenConfirmBtn: {
+    flex: 2,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#D4AF37',
+  },
+  autoGenConfirmText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 1,
+  },
 });
+
