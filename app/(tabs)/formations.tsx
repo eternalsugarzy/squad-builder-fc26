@@ -52,6 +52,9 @@ export default function FormationsScreen() {
   const [fLoading, setFLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<'All' | '4-Back' | '3-Back' | '5-Back'>('All');
 
+  // Pitch Viewer Modal State
+  const [viewingFormation, setViewingFormation] = useState<FormationWithSlots | null>(null);
+
   const loadData = useCallback(async () => {
     if (!activeProfile) return;
     setPosLoading(true);
@@ -147,6 +150,16 @@ export default function FormationsScreen() {
     return true;
   });
 
+  const viewingSlots: PitchSlotItem[] = viewingFormation
+    ? viewingFormation.slots.map((s) => ({
+        id: s.id,
+        coord_x: s.coord_x,
+        coord_y: s.coord_y,
+        label: s.slot_label,
+        positionName: s.position_nama,
+      }))
+    : [];
+
   return (
     <View style={styles.container}>
       {/* ─── Top Sub-Nav Segment Tabs ─────────────── */}
@@ -179,14 +192,14 @@ export default function FormationsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ─── FORMASI SECTION ─────────────────────────── */}
+      {/* ─── FORMASI SECTION (SIMPLE LIST + MODAL PITCH) ─ */}
       {activeSection === 'formations' && (
         <View style={styles.sectionContent}>
           {/* Header Banner */}
           <View style={styles.catalogHeader}>
-            <Text style={styles.catalogTitle}>KATALOG 24 FORMASI RESMI FC 26</Text>
+            <Text style={styles.catalogTitle}>DAFTAR 24 FORMASI RESMI FC 26</Text>
             <Text style={styles.catalogSub}>
-              Semua formasi otomatis siap dipilih di dropdown formasi saat membuat atau menyusun Squad.
+              Tap salah satu formasi di bawah untuk melihat skema lapangan taktis dan struktur posisinya.
             </Text>
           </View>
 
@@ -212,44 +225,34 @@ export default function FormationsScreen() {
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-              {filteredFormations.map((f) => {
+              {filteredFormations.map((f, idx) => {
                 const template = FC26_PRESET_TEMPLATES.find((t) => t.name === f.nama_formasi);
-                const miniSlots: PitchSlotItem[] = f.slots.map((s) => ({
-                  id: s.id,
-                  coord_x: s.coord_x,
-                  coord_y: s.coord_y,
-                  label: s.slot_label,
-                  positionName: s.position_nama,
-                }));
-
                 const positionsSummary = f.slots.map((s) => s.slot_label).join(' • ');
 
                 return (
-                  <View key={f.id} style={styles.formationCard}>
-                    <View style={styles.formationHeader}>
-                      <View>
-                        <Text style={styles.formationTitle}>{f.nama_formasi}</Text>
-                        <Text style={styles.formationSub}>
-                          {template?.category ?? 'Taktik FC 26'} • 11 Slot Pemain
-                        </Text>
+                  <TouchableOpacity
+                    key={f.id}
+                    style={styles.simpleFormationCard}
+                    onPress={() => setViewingFormation(f)}
+                    activeOpacity={0.8}>
+                    <View style={styles.simpleCardHeader}>
+                      <View style={styles.formationNumBadge}>
+                        <Text style={styles.formationNumText}>#{idx + 1}</Text>
                       </View>
-                      <View style={styles.officialBadge}>
-                        <Text style={styles.officialBadgeText}>RESMI FC 26</Text>
+                      <Text style={styles.simpleFormationTitle}>{f.nama_formasi}</Text>
+                      <View style={styles.categoryBadge}>
+                        <Text style={styles.categoryBadgeText}>{template?.category ?? 'Taktik'}</Text>
                       </View>
                     </View>
 
-                    {/* Mini Pitch Preview */}
-                    <View style={styles.miniPitchContainer}>
-                      <PitchCanvas slots={miniSlots} showLabelsOnly interactive={false} />
-                    </View>
+                    <Text style={styles.simpleSlotsSummary} numberOfLines={1}>
+                      {positionsSummary}
+                    </Text>
 
-                    <View style={styles.positionsRow}>
-                      <Text style={styles.positionsLabel}>STRUKTUR POSISI:</Text>
-                      <Text style={styles.positionsText} numberOfLines={2}>
-                        {positionsSummary}
-                      </Text>
+                    <View style={styles.viewPitchBtn}>
+                      <Text style={styles.viewPitchBtnText}>👁️ LIHAT POSISI LAPANGAN ➔</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </ScrollView>
@@ -344,6 +347,45 @@ export default function FormationsScreen() {
           )}
         </View>
       )}
+
+      {/* ─── PITCH VIEWER MODAL ──────────────────────── */}
+      <Modal
+        visible={viewingFormation !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setViewingFormation(null)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setViewingFormation(null)}>
+          <View style={styles.pitchViewerCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.pitchViewerHeader}>
+              <View>
+                <Text style={styles.pitchViewerTitle}>{viewingFormation?.nama_formasi}</Text>
+                <Text style={styles.pitchViewerSub}>11 Slot Pemain Lapangan</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeModalBtn}
+                onPress={() => setViewingFormation(null)}>
+                <Text style={styles.closeModalText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Pitch Canvas */}
+            <View style={styles.pitchViewerCanvasWrapper}>
+              <PitchCanvas slots={viewingSlots} showLabelsOnly interactive={false} />
+            </View>
+
+            {/* Positions Role List */}
+            <Text style={styles.viewerSlotsSummary}>
+              {viewingFormation?.slots.map((s) => s.slot_label).join(' • ')}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.viewerCloseActionBtn}
+              onPress={() => setViewingFormation(null)}>
+              <Text style={styles.viewerCloseActionText}>TUTUP</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* ─── ADD/EDIT POSITION MODAL ─────────────────── */}
       <Modal
@@ -511,70 +553,136 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Formations Card
-  formationCard: {
+  // Simple Formation Card (Compact & Clean)
+  simpleFormationCard: {
     backgroundColor: '#FAFAFA',
     borderWidth: 2,
     borderColor: '#000',
-    marginBottom: 16,
-    padding: 12,
+    padding: 14,
+    marginBottom: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 3, height: 3 },
+    shadowOffset: { width: 2, height: 2 },
     shadowOpacity: 1,
     shadowRadius: 0,
-    elevation: 3,
+    elevation: 2,
   },
-  formationHeader: {
+  simpleCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  formationNumBadge: {
+    backgroundColor: '#D4AF37',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#000',
+    marginRight: 8,
+  },
+  formationNumText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#000',
+  },
+  simpleFormationTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0A1128',
+  },
+  categoryBadge: {
+    backgroundColor: '#0A1128',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  categoryBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#D4AF37',
+  },
+  simpleSlotsSummary: {
+    fontSize: 11,
+    color: '#666',
+    marginBottom: 10,
+  },
+  viewPitchBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#000',
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  viewPitchBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#0A1128',
+    letterSpacing: 0.5,
+  },
+
+  // Pitch Viewer Modal
+  pitchViewerCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: '#000',
+    width: '92%',
+    maxHeight: '85%',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 8,
+  },
+  pitchViewerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
   },
-  formationTitle: {
-    fontSize: 16,
+  pitchViewerTitle: {
+    fontSize: 17,
     fontWeight: '900',
     color: '#0A1128',
   },
-  formationSub: {
+  pitchViewerSub: {
     fontSize: 11,
     color: '#666',
-    marginTop: 2,
+    marginTop: 1,
   },
-  officialBadge: {
-    backgroundColor: '#D4AF37',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderWidth: 1,
+  closeModalBtn: {
+    padding: 6,
+    backgroundColor: '#F0F0F0',
+    borderWidth: 1.5,
     borderColor: '#000',
   },
-  officialBadgeText: {
-    fontSize: 9,
+  closeModalText: {
+    fontSize: 14,
     fontWeight: '900',
-    color: '#000',
-    letterSpacing: 0.5,
   },
-  miniPitchContainer: {
-    height: 180,
+  pitchViewerCanvasWrapper: {
+    height: 320,
     borderWidth: 2,
     borderColor: '#000',
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  positionsRow: {
-    backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: '#DDD',
-    padding: 8,
-  },
-  positionsLabel: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#0A1128',
-    marginBottom: 2,
-  },
-  positionsText: {
+  viewerSlotsSummary: {
     fontSize: 11,
-    color: '#555',
-    lineHeight: 15,
+    color: '#444',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  viewerCloseActionBtn: {
+    backgroundColor: '#0A1128',
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+  },
+  viewerCloseActionText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#D4AF37',
+    letterSpacing: 1,
   },
 
   // Posisi List

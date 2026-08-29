@@ -14,22 +14,27 @@ import { useRouter } from 'expo-router';
 import { useProfile } from '@/src/contexts/ProfileContext';
 import {
   getDashboardData,
-  updateBufferMultiplier,
+  calculatePositionQuotas,
   type DashboardData,
 } from '@/src/services/dashboardService';
+import { listFormations, type FormationWithSlots } from '@/src/services/formationService';
 import { checkExpiredStatusPlayers } from '@/src/services/notificationService';
 import { ComparisonChart } from '@/src/components/ComparisonChart';
+import type { PositionQuota } from '@/src/types';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { activeProfile, loading: profileLoading } = useProfile();
 
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [formations, setFormations] = useState<FormationWithSlots[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Buffer Multiplier Modal
-  const [showBufferModal, setShowBufferModal] = useState(false);
-  const [bufferValue, setBufferValue] = useState<number>(1.5);
+  // Simulation Mode State for Position Quota Monitor
+  const [selectedSimFormationId, setSelectedSimFormationId] = useState<string | null>(null);
+  const [simulatedQuotas, setSimulatedQuotas] = useState<PositionQuota[]>([]);
+  const [showSimPickerModal, setShowSimPickerModal] = useState(false);
+  const [simCatFilter, setSimCatFilter] = useState<'All' | '4-Back' | '3-Back' | '5-Back'>('All');
 
   const loadData = useCallback(async () => {
     if (!activeProfile) return;
@@ -38,9 +43,12 @@ export default function HomeScreen() {
       // Check for any expired injury statuses
       await checkExpiredStatusPlayers(activeProfile.id);
 
-      const data = await getDashboardData(activeProfile.id);
+      const [data, fList] = await Promise.all([
+        getDashboardData(activeProfile.id),
+        listFormations(activeProfile.id),
+      ]);
       setDashboardData(data);
-      setBufferValue(data.bufferMultiplier);
+      setFormations(fList);
     } catch (e) {
       console.error('[HomeScreen] loadData error:', e);
     } finally {
@@ -52,17 +60,17 @@ export default function HomeScreen() {
     loadData();
   }, [loadData]);
 
-  async function handleSaveBuffer(val: number) {
-    if (!activeProfile) return;
-    try {
-      await updateBufferMultiplier(activeProfile.id, val);
-      setBufferValue(val);
-      setShowBufferModal(false);
-      loadData();
-    } catch (e) {
-      Alert.alert('Error', 'Gagal memperbarui buffer multiplier');
+  // Recompute simulated quotas when simulation formation changes
+  useEffect(() => {
+    async function updateQuotas() {
+      if (!activeProfile) return;
+      if (selectedSimFormationId) {
+        const sim = await calculatePositionQuotas(activeProfile.id, selectedSimFormationId, 4);
+        setSimulatedQuotas(sim);
+      }
     }
-  }
+    updateQuotas();
+  }, [selectedSimFormationId, activeProfile]);
 
   // ─── Guard: No Active Profile ───────────────────
   if (profileLoading || loading) {
@@ -92,6 +100,8 @@ export default function HomeScreen() {
   }
 
   const d = dashboardData;
+  const activeQuotas = selectedSimFormationId ? simulatedQuotas : (d?.positionQuotas ?? []);
+  const selectedFormationObj = formations.find((f) => f.id === selectedSimFormationId);
 
   return (
     <View style={styles.container}>
@@ -108,14 +118,14 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Quick Stats Grid (Clickable) */}
+          {/* Quick Stats Grid (Clickable to Filter Players) */}
           <View style={styles.statsGrid}>
             <TouchableOpacity
               style={styles.statBox}
               onPress={() => router.push({ pathname: '/(tabs)/players', params: { status: 'ALL' } })}
               activeOpacity={0.7}>
               <Text style={styles.statNum}>{d?.totalPlayers ?? 0}</Text>
-              <Text style={styles.statLabel}>TOTAL PEMAIN ➔</Text>
+              <Text style={styles.statLabel}>TOTAL ➔</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -193,35 +203,50 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ─── Position Quota Alert (On-The-Fly) ───── */}
+        {/* ─── Position Quota Monitor (Dual Mode: Sesuai Squad vs Simulasi) ─ */}
         <View style={styles.quotaCard}>
           <View style={styles.quotaHeader}>
-            <View>
-              <Text style={styles.quotaTitle}>MONITOR KUOTA POSISI</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.quotaTitle}>MONITOR KEBUTUHAN POSISI</Text>
               <Text style={styles.quotaSubtitle}>
-                Dihitung real-time dari formasi aktif × Buffer ({bufferValue}x)
+                {selectedSimFormationId
+                  ? `Simulasi kebutuhan jika memainkan 4 tim dengan formasi ${selectedFormationObj?.nama_formasi}`
+                  : `Dihitung real-time dari total formasi ${d?.squads.length ?? 4} squad aktif`}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.bufferBtn}
-              onPress={() => setShowBufferModal(true)}>
-              <Text style={styles.bufferBtnText}>⚙️ {bufferValue}x</Text>
-            </TouchableOpacity>
           </View>
+
+          {/* Mode Switcher Dropdown Button */}
+          <TouchableOpacity
+            style={styles.modeDropdownBtn}
+            onPress={() => setShowSimPickerModal(true)}
+            activeOpacity={0.8}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.modeDropdownLabel}>SUMBER TINJAUAN KUOTA:</Text>
+              <Text style={styles.modeDropdownValue} numberOfLines={1}>
+                {selectedSimFormationId
+                  ? `🔍 Simulasi: ${selectedFormationObj?.nama_formasi ?? 'Formasi'} (4 Tim)`
+                  : `⚡ Sesuai Formasi Tim Aktif (${d?.squads.length ?? 4} Squad)`}
+              </Text>
+            </View>
+            <View style={styles.modeDropdownArrowBox}>
+              <Text style={styles.modeDropdownArrow}>▾ GANTI</Text>
+            </View>
+          </TouchableOpacity>
 
           {/* Table Header */}
           <View style={styles.tableHeader}>
             <Text style={[styles.colHeader, { flex: 1.2 }]}>POSISI</Text>
-            <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>IDEAL</Text>
-            <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>AKTIF</Text>
-            <Text style={[styles.colHeader, { flex: 1.4, textAlign: 'right' }]}>STATUS</Text>
+            <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>BUTUH</Text>
+            <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>MILIK</Text>
+            <Text style={[styles.colHeader, { flex: 1.5, textAlign: 'right' }]}>STATUS</Text>
           </View>
 
           {/* Table Rows */}
-          {d?.positionQuotas.length === 0 ? (
+          {activeQuotas.length === 0 ? (
             <Text style={styles.emptyTableText}>Belum ada posisi terdaftar</Text>
           ) : (
-            d?.positionQuotas.map((q) => {
+            activeQuotas.map((q) => {
               const isDeficit = q.selisih < 0;
               const isSurplus = q.selisih > 0;
               const isBalanced = q.selisih === 0;
@@ -237,7 +262,7 @@ export default function HomeScreen() {
                   <Text style={[styles.tableCell, { flex: 1, textAlign: 'center', fontWeight: '900' }]}>
                     {q.jumlah_aktif}
                   </Text>
-                  <View style={[styles.statusTagWrapper, { flex: 1.4, alignItems: 'flex-end' }]}>
+                  <View style={[styles.statusTagWrapper, { flex: 1.5, alignItems: 'flex-end' }]}>
                     {isDeficit && (
                       <View style={styles.deficitBadge}>
                         <Text style={styles.deficitText}>Kurang {Math.abs(q.selisih)} ⚠️</Text>
@@ -293,54 +318,120 @@ export default function HomeScreen() {
                   {w.target_ovr_min && w.target_ovr_max
                     ? `${w.target_ovr_min}–${w.target_ovr_max}`
                     : w.target_ovr_min
-                      ? `≥ ${w.target_ovr_min}`
-                      : 'Bebas'}
-                  {w.terkait_player_nama ? ` (Ganti ${w.terkait_player_nama})` : ''}
+                    ? `Min ${w.target_ovr_min}`
+                    : 'Bebas'}
                 </Text>
+                {w.terkait_player_nama && (
+                  <Text style={styles.watchTerkait} numberOfLines={1}>
+                    Gantikan: {w.terkait_player_nama} ({w.terkait_player_ovr ?? '-'})
+                  </Text>
+                )}
                 {w.catatan && (
                   <Text style={styles.watchNote} numberOfLines={1}>
-                    {w.catatan}
+                    "{w.catatan}"
                   </Text>
                 )}
               </View>
             </TouchableOpacity>
           ))
         )}
+
+        <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* ─── BUFFER MULTIPLIER MODAL ─────────────── */}
-      <Modal visible={showBufferModal} transparent animationType="fade" onRequestClose={() => setShowBufferModal(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowBufferModal(false)}>
-          <View style={styles.bufferModalCard}>
-            <Text style={styles.bufferModalTitle}>PENGATURAN BUFFER KUOTA</Text>
-            <Text style={styles.bufferModalDesc}>
-              Buffer multiplier menentukan seberapa banyak pemain cadangan ideal yang dibutuhkan per slot formasi. Default: 1.5x.
-            </Text>
+      {/* ─── SIMULATION FORMATION PICKER MODAL ──────── */}
+      <Modal
+        visible={showSimPickerModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSimPickerModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowSimPickerModal(false)}>
+          <View style={styles.simModalCard} onStartShouldSetResponder={() => true}>
+            <Text style={styles.simModalTitle}>PILIH SUMBER TINJAUAN KUOTA</Text>
 
-            <View style={styles.bufferOptionsRow}>
-              {[1.0, 1.25, 1.5, 1.75, 2.0].map((val) => (
-                <TouchableOpacity
-                  key={val}
+            {/* Default Option: Actual Squad Formations */}
+            <TouchableOpacity
+              style={[
+                styles.simChoiceItem,
+                selectedSimFormationId === null && styles.simChoiceItemActive,
+              ]}
+              onPress={() => {
+                setSelectedSimFormationId(null);
+                setShowSimPickerModal(false);
+              }}>
+              <View>
+                <Text
                   style={[
-                    styles.bufferOptionChip,
-                    bufferValue === val && styles.bufferOptionChipActive,
-                  ]}
-                  onPress={() => handleSaveBuffer(val)}>
-                  <Text
-                    style={[
-                      styles.bufferOptionText,
-                      bufferValue === val && styles.bufferOptionTextActive,
-                    ]}>
-                    {val}x
+                    styles.simChoiceTitle,
+                    selectedSimFormationId === null && styles.simChoiceTitleActive,
+                  ]}>
+                  ⚡ Sesuai Formasi Squad Aktif (Default)
+                </Text>
+                <Text style={styles.simChoiceSub}>
+                  Menghitung slot dari formasi nyata yang sedang dipakai oleh tim 1–4 Anda saat ini.
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <Text style={styles.simSectionHeader}>ATAU SIMULASI FORMASI TERTENTU (4 TIM):</Text>
+
+            {/* Category Filter */}
+            <View style={styles.simCatFilterRow}>
+              {(['All', '4-Back', '3-Back', '5-Back'] as const).map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.simCatChip, simCatFilter === cat && styles.simCatChipActive]}
+                  onPress={() => setSimCatFilter(cat)}>
+                  <Text style={[styles.simCatText, simCatFilter === cat && styles.simCatTextActive]}>
+                    {cat === 'All' ? 'SEMUA' : cat}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              {formations
+                .filter((f) => {
+                  if (simCatFilter === 'All') return true;
+                  if (simCatFilter === '4-Back') return f.nama_formasi.startsWith('4');
+                  if (simCatFilter === '3-Back') return f.nama_formasi.startsWith('3');
+                  if (simCatFilter === '5-Back') return f.nama_formasi.startsWith('5');
+                  return true;
+                })
+                .map((f) => {
+                  const isSelected = selectedSimFormationId === f.id;
+                  const slotsSummary = f.slots.map((s) => s.slot_label).join(' • ');
+
+                  return (
+                    <TouchableOpacity
+                      key={f.id}
+                      style={[styles.simChoiceItem, isSelected && styles.simChoiceItemActive]}
+                      onPress={() => {
+                        setSelectedSimFormationId(f.id);
+                        setShowSimPickerModal(false);
+                      }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={[styles.simChoiceTitle, isSelected && styles.simChoiceTitleActive]}>
+                          {f.nama_formasi}
+                        </Text>
+                        {isSelected && (
+                          <View style={styles.activeTag}>
+                            <Text style={styles.activeTagText}>AKTIF</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.simChoiceSub} numberOfLines={1}>
+                        {slotsSummary}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+            </ScrollView>
+
             <TouchableOpacity
-              style={styles.bufferModalClose}
-              onPress={() => setShowBufferModal(false)}>
-              <Text style={styles.bufferModalCloseText}>TUTUP</Text>
+              style={styles.simCloseBtn}
+              onPress={() => setShowSimPickerModal(false)}>
+              <Text style={styles.simCloseText}>TUTUP</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -358,6 +449,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
   },
   loadingText: {
     marginTop: 12,
@@ -368,10 +460,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    padding: 32,
+    backgroundColor: '#FFFFFF',
   },
   emptyIcon: {
-    fontSize: 48,
+    fontSize: 56,
     marginBottom: 16,
   },
   emptyTitle: {
@@ -379,41 +472,44 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#0A1128',
     letterSpacing: 2,
-    textAlign: 'center',
     marginBottom: 8,
   },
   emptyHint: {
     fontSize: 14,
-    color: '#888',
+    color: '#666',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   actionBtn: {
     backgroundColor: '#0A1128',
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingVertical: 12,
     borderWidth: 2,
     borderColor: '#000',
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
   actionBtnText: {
     fontSize: 13,
     fontWeight: '900',
-    color: '#FFF',
+    color: '#FFFFFF',
     letterSpacing: 1,
   },
-
   scrollContent: {
     padding: 16,
-    paddingBottom: 130,
+    paddingBottom: 120,
   },
 
   // Hero Card
   heroCard: {
+    backgroundColor: '#0A1128',
     borderWidth: 3,
-    borderColor: '#000',
-    backgroundColor: '#FAFAFA',
-    padding: 14,
-    marginBottom: 14,
+    borderColor: '#000000',
+    padding: 18,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 4, height: 4 },
     shadowOpacity: 1,
@@ -424,20 +520,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    borderBottomWidth: 2,
-    borderBottomColor: '#000',
-    paddingBottom: 10,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   heroTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
-    color: '#0A1128',
-    letterSpacing: 1,
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
   },
   heroSubtitle: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#D4AF37',
     letterSpacing: 2,
     marginTop: 2,
@@ -445,50 +538,53 @@ const styles = StyleSheet.create({
   saveBadge: {
     backgroundColor: '#D4AF37',
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderWidth: 1.5,
     borderColor: '#000',
   },
   saveBadgeText: {
     fontSize: 10,
     fontWeight: '900',
-    color: '#000',
+    color: '#000000',
+    letterSpacing: 1,
   },
+
+  // Stats Grid
   statsGrid: {
     flexDirection: 'row',
     gap: 8,
   },
   statBox: {
     flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#000',
-    backgroundColor: '#FFF',
-    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#000000',
+    paddingVertical: 10,
     alignItems: 'center',
   },
   statNum: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
     color: '#0A1128',
   },
   statLabel: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: '800',
-    color: '#888',
-    letterSpacing: 0.5,
+    color: '#666',
     marginTop: 2,
+    letterSpacing: 0.5,
   },
 
-  // Shortcuts
+  // Shortcuts Row
   shortcutsRow: {
     marginBottom: 16,
   },
   shortcutBtnPrimary: {
-    backgroundColor: '#0A1128',
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 3,
+    backgroundColor: '#D4AF37',
+    borderWidth: 2,
     borderColor: '#000',
+    paddingVertical: 12,
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 1,
@@ -496,19 +592,18 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   shortcutBtnTextPrimary: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
-    color: '#D4AF37',
+    color: '#000',
     letterSpacing: 1.5,
   },
 
-  // Section Headers
+  // Section Header
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
-    marginTop: 6,
   },
   sectionTitle: {
     fontSize: 14,
@@ -517,40 +612,41 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   seeAllText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#1A73E8',
+    color: '#0A1128',
   },
 
-  // Squads Overview Grid
+  // Squads Grid
   squadsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
     marginBottom: 16,
   },
   squadCard: {
-    width: '48.5%',
+    width: '48%',
+    backgroundColor: '#FAFAFA',
     borderWidth: 2,
     borderColor: '#000',
-    backgroundColor: '#FAFAFA',
-    padding: 10,
+    padding: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 2, height: 2 },
+    shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 0,
-    elevation: 2,
+    elevation: 3,
   },
   squadCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   squadCardTier: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '900',
-    color: '#0A1128',
+    color: '#666',
+    letterSpacing: 1,
   },
   squadOvrBadge: {
     backgroundColor: '#0A1128',
@@ -558,100 +654,118 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   squadOvrText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
     color: '#D4AF37',
   },
   squadCardName: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '800',
-    color: '#444',
+    color: '#0A1128',
+    marginBottom: 2,
   },
   squadCardForm: {
-    fontSize: 10,
-    color: '#888',
-    marginTop: 2,
+    fontSize: 11,
+    color: '#666',
   },
 
-  // Position Quota Alert Card
+  // Quota Card
   quotaCard: {
-    borderWidth: 3,
-    borderColor: '#000',
     backgroundColor: '#FAFAFA',
+    borderWidth: 2,
+    borderColor: '#000',
     padding: 14,
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 4, height: 4 },
+    shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 0,
-    elevation: 4,
+    elevation: 3,
   },
   quotaHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: '#000',
-    paddingBottom: 8,
     marginBottom: 10,
   },
   quotaTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
     color: '#0A1128',
     letterSpacing: 1,
   },
   quotaSubtitle: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#666',
     marginTop: 2,
+    lineHeight: 15,
   },
-  bufferBtn: {
+  modeDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0F4FF',
     borderWidth: 1.5,
-    borderColor: '#000',
-    backgroundColor: '#D4AF37',
+    borderColor: '#0A1128',
+    padding: 10,
+    marginBottom: 12,
+  },
+  modeDropdownLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#0A1128',
+    letterSpacing: 0.5,
+  },
+  modeDropdownValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0A1128',
+    marginTop: 1,
+  },
+  modeDropdownArrowBox: {
+    backgroundColor: '#0A1128',
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  bufferBtnText: {
-    fontSize: 11,
+  modeDropdownArrow: {
+    fontSize: 10,
     fontWeight: '900',
-    color: '#000',
+    color: '#D4AF37',
   },
   tableHeader: {
     flexDirection: 'row',
-    borderBottomWidth: 1.5,
-    borderBottomColor: '#000',
-    paddingBottom: 6,
-    marginBottom: 6,
+    backgroundColor: '#0A1128',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginBottom: 4,
   },
   colHeader: {
     fontSize: 10,
     fontWeight: '900',
-    color: '#888',
-    letterSpacing: 0.5,
+    color: '#FFFFFF',
+    letterSpacing: 1,
   },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#EEE',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
   },
   posTag: {
-    backgroundColor: '#0A1128',
+    backgroundColor: '#F0F0F0',
     paddingHorizontal: 6,
     paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#000',
     alignSelf: 'flex-start',
   },
   posTagText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '900',
-    color: '#FFF',
+    color: '#0A1128',
   },
   tableCell: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
     color: '#0A1128',
   },
   statusTagWrapper: {},
@@ -663,8 +777,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   deficitText: {
-    fontSize: 9,
-    fontWeight: '800',
+    fontSize: 10,
+    fontWeight: '900',
     color: '#C5221F',
   },
   balancedBadge: {
@@ -675,21 +789,21 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   balancedText: {
-    fontSize: 9,
-    fontWeight: '800',
+    fontSize: 10,
+    fontWeight: '900',
     color: '#137333',
   },
   surplusBadge: {
-    backgroundColor: '#E8F0FE',
+    backgroundColor: '#F0F4FF',
     borderWidth: 1,
-    borderColor: '#1A73E8',
+    borderColor: '#0A1128',
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   surplusText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#1A73E8',
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#0A1128',
   },
   emptyTableText: {
     fontSize: 12,
@@ -700,47 +814,55 @@ const styles = StyleSheet.create({
 
   // Watchlist Items
   emptyWatchCard: {
-    borderWidth: 1.5,
-    borderColor: '#DDD',
+    backgroundColor: '#FAFAFA',
+    borderWidth: 2,
+    borderColor: '#000',
     padding: 16,
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   emptyWatchText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#888',
     marginBottom: 8,
   },
   addWatchBtn: {
     backgroundColor: '#0A1128',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   addWatchBtnText: {
     fontSize: 11,
     fontWeight: '900',
-    color: '#FFF',
+    color: '#D4AF37',
+    letterSpacing: 1,
   },
   watchItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#FAFAFA',
     borderWidth: 2,
     borderColor: '#000',
-    backgroundColor: '#FAFAFA',
+    padding: 10,
     marginBottom: 8,
-    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
   },
   watchPosBox: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     backgroundColor: '#0A1128',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#000',
   },
   watchPosText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '900',
     color: '#D4AF37',
   },
@@ -748,81 +870,132 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   watchOvr: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '900',
     color: '#0A1128',
+  },
+  watchTerkait: {
+    fontSize: 11,
+    color: '#B06000',
+    fontWeight: '700',
+    marginTop: 1,
   },
   watchNote: {
     fontSize: 11,
     color: '#666',
-    marginTop: 2,
     fontStyle: 'italic',
+    marginTop: 1,
   },
 
-  // Buffer Modal
+  // Simulation Picker Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
-  bufferModalCard: {
+  simModalCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 3,
     borderColor: '#000',
-    padding: 20,
-    width: '85%',
-    maxWidth: 380,
+    width: '90%',
+    maxWidth: 420,
+    maxHeight: '80%',
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 6, height: 6 },
     shadowOpacity: 1,
     shadowRadius: 0,
     elevation: 8,
   },
-  bufferModalTitle: {
+  simModalTitle: {
     fontSize: 15,
     fontWeight: '900',
     color: '#0A1128',
     letterSpacing: 1,
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  bufferModalDesc: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 16,
-    lineHeight: 16,
-  },
-  bufferOptionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  bufferOptionChip: {
+  simChoiceItem: {
+    backgroundColor: '#FAFAFA',
     borderWidth: 1.5,
     borderColor: '#000',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    backgroundColor: '#F0F0F0',
+    padding: 12,
+    marginBottom: 8,
   },
-  bufferOptionChipActive: {
-    backgroundColor: '#D4AF37',
+  simChoiceItemActive: {
+    backgroundColor: '#F0F4FF',
+    borderColor: '#0A1128',
+    borderWidth: 2.5,
   },
-  bufferOptionText: {
-    fontSize: 12,
+  simChoiceTitle: {
+    fontSize: 13,
     fontWeight: '900',
     color: '#0A1128',
   },
-  bufferOptionTextActive: {
+  simChoiceTitleActive: {
+    color: '#0A1128',
+  },
+  simChoiceSub: {
+    fontSize: 10,
+    color: '#666',
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  simSectionHeader: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#888',
+    letterSpacing: 1,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  simCatFilterRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 8,
+  },
+  simCatChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#F0F0F0',
+    borderWidth: 1.5,
+    borderColor: '#000',
+  },
+  simCatChipActive: {
+    backgroundColor: '#0A1128',
+  },
+  simCatText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0A1128',
+  },
+  simCatTextActive: {
+    color: '#D4AF37',
+  },
+  activeTag: {
+    backgroundColor: '#D4AF37',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  activeTagText: {
+    fontSize: 9,
+    fontWeight: '900',
     color: '#000',
   },
-  bufferModalClose: {
+  simCloseBtn: {
     alignSelf: 'center',
-    padding: 6,
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 24,
+    backgroundColor: '#0A1128',
+    borderWidth: 2,
+    borderColor: '#000',
   },
-  bufferModalCloseText: {
+  simCloseText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#666',
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
 });

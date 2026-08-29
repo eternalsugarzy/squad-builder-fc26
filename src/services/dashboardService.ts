@@ -54,13 +54,16 @@ export async function updateBufferMultiplier(
 }
 
 /**
- * Compute on-the-fly position quotas:
- * kuota_ideal(posisi) = SUM(slots with position across squads) × buffer_multiplier
- * jumlah_aktif = count of active players who have that position (primary or secondary)
+ * Compute position quotas (supports both actual squad mode and simulated formation mode):
+ * - If formationId is passed: simulates requirement if all 4 core squads used that formation (or single squad)
+ * - If formationId is null: aggregates actual formation slots across all squads in the profile.
  */
-export async function calculatePositionQuotas(profileId: string): Promise<PositionQuota[]> {
+export async function calculatePositionQuotas(
+  profileId: string,
+  simulatedFormationId?: string | null,
+  simulatedSquadCount: number = 4
+): Promise<PositionQuota[]> {
   const db = await getDatabase();
-  const bufferMultiplier = await getBufferMultiplier(profileId);
   const positions = await listPositions(profileId);
   const allPlayers = await listPlayers(profileId);
 
@@ -69,41 +72,59 @@ export async function calculatePositionQuotas(profileId: string): Promise<Positi
     (p) => p.status === 'aktif' || p.status === 'akan_dijual'
   );
 
-  // Count formation slots across all squads belonging to this profile
-  const slotCountRows = await db.getAllAsync<{ position_id: string; slot_count: number }>(
-    `SELECT fs.position_id, COUNT(fs.id) as slot_count
-     FROM squads s
-     JOIN formation_slots fs ON s.formation_id = fs.formation_id
-     WHERE s.profile_id = ?
-     GROUP BY fs.position_id`,
-    profileId
-  );
-
   const slotCountMap = new Map<string, number>();
-  for (const r of slotCountRows) {
-    slotCountMap.set(r.position_id, r.slot_count);
+
+  if (simulatedFormationId) {
+    // Count slots for this single formation and multiply by simulatedSquadCount
+    const formationSlots = await db.getAllAsync<{ position_id: string; slot_count: number }>(
+      `SELECT position_id, COUNT(id) as slot_count
+       FROM formation_slots
+       WHERE formation_id = ?
+       GROUP BY position_id`,
+      simulatedFormationId
+    );
+
+    for (const r of formationSlots) {
+      slotCountMap.set(r.position_id, r.slot_count * simulatedSquadCount);
+    }
+  } else {
+    // Count actual formation slots across all active squads in profile
+    const slotCountRows = await db.getAllAsync<{ position_id: string; slot_count: number }>(
+      `SELECT fs.position_id, COUNT(fs.id) as slot_count
+       FROM squads s
+       JOIN formation_slots fs ON s.formation_id = fs.formation_id
+       WHERE s.profile_id = ?
+       GROUP BY fs.position_id`,
+      profileId
+    );
+
+    for (const r of slotCountRows) {
+      slotCountMap.set(r.position_id, r.slot_count);
+    }
   }
 
   const result: PositionQuota[] = [];
 
   for (const pos of positions) {
-    const rawSlots = slotCountMap.get(pos.id) ?? 0;
-    const kuotaIdeal = Math.round(rawSlots * bufferMultiplier);
+    const needed = slotCountMap.get(pos.id) ?? 0;
 
-    // Count active players who have this position (primary or secondary)
-    const jumlahAktif = activePlayers.filter((p) =>
+    // Count active players who can play this position (primary or secondary)
+    const owned = activePlayers.filter((p) =>
       p.positions.some((pp) => pp.id === pos.id)
     ).length;
 
-    const selisih = jumlahAktif - kuotaIdeal;
+    const selisih = owned - needed;
 
-    result.push({
-      position_id: pos.id,
-      position_nama: pos.nama,
-      kuota_ideal: kuotaIdeal,
-      jumlah_aktif: jumlahAktif,
-      selisih,
-    });
+    // Only include positions that are either needed > 0 OR owned > 0 (to keep monitor clean)
+    if (needed > 0 || owned > 0) {
+      result.push({
+        position_id: pos.id,
+        position_nama: pos.nama,
+        kuota_ideal: needed,
+        jumlah_aktif: owned,
+        selisih,
+      });
+    }
   }
 
   return result;
