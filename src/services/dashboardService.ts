@@ -110,10 +110,8 @@ export async function calculatePositionQuotas(
   for (const pos of positions) {
     const needed = slotCountMap.get(pos.id) ?? 0;
 
-    // Count active players who can play this position (primary or secondary)
-    const owned = activePlayers.filter((p) =>
-      p.positions.some((pp) => pp.id === pos.id)
-    ).length;
+    // Count active players whose primary position (positions[0]) is this position
+    const owned = activePlayers.filter((p) => p.positions[0]?.id === pos.id).length;
 
     const selisih = owned - needed;
 
