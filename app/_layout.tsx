@@ -9,6 +9,7 @@ export default function RootLayout() {
     <ProfileProvider>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="watchlist" options={{ headerShown: true, title: 'WATCHLIST' }} />
       </Stack>
       <StatusBar style="dark" />
     </ProfileProvider>
