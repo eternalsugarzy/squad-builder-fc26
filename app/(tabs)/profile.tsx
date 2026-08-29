@@ -30,7 +30,9 @@ import { listPositions } from '@/src/services/positionService';
 import { listPlayers } from '@/src/services/playerService';
 import type { Profile, Position, PlayerWithPositions } from '@/src/types';
 
-export default function ProfileScreen() {
+type MenuTab = 'profiles' | 'watchlist' | 'backup' | 'about';
+
+export default function MoreMenuScreen() {
   const {
     profiles,
     activeProfile,
@@ -43,7 +45,7 @@ export default function ProfileScreen() {
     refresh,
   } = useProfile();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'watchlist'>('profile');
+  const [activeMenu, setActiveMenu] = useState<MenuTab>('profiles');
 
   // Profile Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -89,23 +91,23 @@ export default function ProfileScreen() {
       setPositions(posList);
       setPlayers(pList);
     } catch (e) {
-      console.error('[ProfileScreen] loadWatchlistData error:', e);
+      console.error('[MoreMenuScreen] loadWatchlistData error:', e);
     } finally {
       setWLoading(false);
     }
   }, [activeProfile]);
 
   useEffect(() => {
-    if (activeTab === 'watchlist') {
+    if (activeMenu === 'watchlist') {
       loadWatchlistData();
     }
-  }, [activeTab, loadWatchlistData]);
+  }, [activeMenu, loadWatchlistData]);
 
   if (profileLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#0A1128" />
-        <Text style={styles.loadingText}>Memuat profil...</Text>
+        <Text style={styles.loadingText}>Memuat menu...</Text>
       </View>
     );
   }
@@ -296,42 +298,59 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ─── Segment Tabs Header ───────────────────── */}
-      <View style={styles.segmentTabs}>
+      {/* ─── Top 4 Menu Segment Tabs ───────────────── */}
+      <View style={styles.menuSegmentBar}>
         <TouchableOpacity
-          style={[styles.segmentTab, activeTab === 'profile' && styles.segmentTabActive]}
-          onPress={() => setActiveTab('profile')}
+          style={[styles.menuSegmentBtn, activeMenu === 'profiles' && styles.menuSegmentBtnActive]}
+          onPress={() => setActiveMenu('profiles')}
           activeOpacity={0.8}>
-          <Text style={[styles.segmentTabText, activeTab === 'profile' && styles.segmentTabTextActive]}>
-            PROFIL & BACKUP
+          <Text style={[styles.menuSegmentText, activeMenu === 'profiles' && styles.menuSegmentTextActive]}>
+            📁 PROFIL
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.segmentTab, activeTab === 'watchlist' && styles.segmentTabActive]}
-          onPress={() => setActiveTab('watchlist')}
+          style={[styles.menuSegmentBtn, activeMenu === 'watchlist' && styles.menuSegmentBtnActive]}
+          onPress={() => setActiveMenu('watchlist')}
           activeOpacity={0.8}>
-          <Text style={[styles.segmentTabText, activeTab === 'watchlist' && styles.segmentTabTextActive]}>
-            TRANSFER WATCHLIST
+          <Text style={[styles.menuSegmentText, activeMenu === 'watchlist' && styles.menuSegmentTextActive]}>
+            🎯 WATCHLIST
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.menuSegmentBtn, activeMenu === 'backup' && styles.menuSegmentBtnActive]}
+          onPress={() => setActiveMenu('backup')}
+          activeOpacity={0.8}>
+          <Text style={[styles.menuSegmentText, activeMenu === 'backup' && styles.menuSegmentTextActive]}>
+            💾 BACKUP
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.menuSegmentBtn, activeMenu === 'about' && styles.menuSegmentBtnActive]}
+          onPress={() => setActiveMenu('about')}
+          activeOpacity={0.8}>
+          <Text style={[styles.menuSegmentText, activeMenu === 'about' && styles.menuSegmentTextActive]}>
+            ℹ️ TENTANG
           </Text>
         </TouchableOpacity>
       </View>
 
       {/* ═══════════════════════════════════════════════ */}
-      {/* ─── TAB 1: PROFIL & BACKUP ─────────────────── */}
+      {/* ─── MENU 1: PROFIL & SAVE CAREER MODE ──────── */}
       {/* ═══════════════════════════════════════════════ */}
-      {activeTab === 'profile' && (
+      {activeMenu === 'profiles' && (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          {/* Profile list */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>DAFTAR SAVE CAREER MODE</Text>
-            <Text style={styles.sectionSub}>{profiles.length} profil tersimpan</Text>
+            <Text style={styles.sectionSub}>{profiles.length} save terdaftar di aplikasi</Text>
           </View>
 
           {profiles.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyIcon}>📂</Text>
-              <Text style={styles.emptyTitle}>Belum Ada Profil</Text>
+              <Text style={styles.emptyTitle}>Belum Ada Save Profil</Text>
               <Text style={styles.emptyHint}>
                 Buat profil baru untuk memulai Career Mode Manager
               </Text>
@@ -395,75 +414,16 @@ export default function ProfileScreen() {
               setShowAddModal(true);
             }}
             activeOpacity={0.8}>
-            <Text style={styles.addButtonText}>+ BUAT PROFIL BARU</Text>
+            <Text style={styles.addButtonText}>+ BUAT SAVE PROFIL BARU</Text>
           </TouchableOpacity>
-
-          {/* Export / Import Tools Section */}
-          {activeProfile && (
-            <View style={styles.toolsCard}>
-              <Text style={styles.toolsTitle}>BACKUP & EKSPOR ({activeProfile.nama_save})</Text>
-
-              <TouchableOpacity style={styles.toolBtn} onPress={handleExportTeamSheetsText}>
-                <Text style={styles.toolBtnText}>📋 Ekspor Team Sheets (Format Teks)</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.toolBtn} onPress={handleExportJson}>
-                <Text style={styles.toolBtnText}>💾 Backup Profil Ini (JSON)</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.toolBtn, { backgroundColor: '#F0F4FF' }]}
-                onPress={async () => {
-                  Alert.alert(
-                    'Muat Data Awal',
-                    'Muat ulang data profil "Save 1" (44 pemain, formasi 4-3-3, 4 tim, watchlist)?',
-                    [
-                      { text: 'Batal', style: 'cancel' },
-                      {
-                        text: 'Muat',
-                        onPress: async () => {
-                          await seedData();
-                          Alert.alert('Sukses', 'Data Save 1 berhasil dimuat!');
-                        },
-                      },
-                    ]
-                  );
-                }}>
-                <Text style={[styles.toolBtnText, { color: '#0A1128' }]}>
-                  ⚡ Muat Ulang Data Awal (Save 1)
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.toolBtn, styles.toolBtnImport]}
-                onPress={() => setShowImportModal(true)}>
-                <Text style={[styles.toolBtnText, { color: '#0A1128' }]}>
-                  📥 Impor Profil dari JSON
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ─── Developer Credit Card ────────────── */}
-          <View style={styles.devCard}>
-            <View style={styles.devHeaderRow}>
-              <Text style={styles.devTag}>APP CREATOR & DEVELOPER</Text>
-              <View style={styles.devVerBadge}>
-                <Text style={styles.devVerText}>v1.0</Text>
-              </View>
-            </View>
-            <Text style={styles.devName}>Irwan Firmanto</Text>
-            <Text style={styles.devSub}>FC 26 Career Mode Manager • Personal iOS Edition</Text>
-          </View>
         </ScrollView>
       )}
 
       {/* ═══════════════════════════════════════════════ */}
-      {/* ─── TAB 2: TRANSFER WATCHLIST ──────────────── */}
+      {/* ─── MENU 2: TRANSFER WATCHLIST ──────────────── */}
       {/* ═══════════════════════════════════════════════ */}
-      {activeTab === 'watchlist' && (
+      {activeMenu === 'watchlist' && (
         <View style={{ flex: 1 }}>
-          {/* Top Action Banner */}
           <View style={styles.watchActionBar}>
             <TouchableOpacity
               style={styles.watchAddBtn}
@@ -480,7 +440,7 @@ export default function ProfileScreen() {
               <Text style={styles.emptyIcon}>🎯</Text>
               <Text style={styles.emptyTitle}>Belum Ada Target Transfer</Text>
               <Text style={styles.emptyHint}>
-                Daftarkan posisi pemain incaran dan hubungkan dengan pemain yang akan dijual
+                Daftarkan target transfer dan hubungkan dengan pemain yang akan dijual
               </Text>
             </View>
           ) : (
@@ -532,6 +492,111 @@ export default function ProfileScreen() {
             </ScrollView>
           )}
         </View>
+      )}
+
+      {/* ═══════════════════════════════════════════════ */}
+      {/* ─── MENU 3: BACKUP & EKSPOR ─────────────────── */}
+      {/* ═══════════════════════════════════════════════ */}
+      {activeMenu === 'backup' && (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>BACKUP & EKSPOR DATA</Text>
+            <Text style={styles.sectionSub}>
+              Profil Aktif: <Text style={{ fontWeight: '900', color: '#0A1128' }}>{activeProfile?.nama_save ?? '-'}</Text>
+            </Text>
+          </View>
+
+          {activeProfile && (
+            <View style={styles.toolsCard}>
+              <TouchableOpacity style={styles.toolBtn} onPress={handleExportTeamSheetsText}>
+                <Text style={styles.toolBtnText}>📋 Ekspor Team Sheets (Format Teks)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.toolBtn} onPress={handleExportJson}>
+                <Text style={styles.toolBtnText}>💾 Backup Profil Ini ke File JSON</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.toolBtn, styles.toolBtnImport]}
+                onPress={() => setShowImportModal(true)}>
+                <Text style={[styles.toolBtnText, { color: '#000' }]}>
+                  📥 Impor Profil dari Teks JSON
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.toolBtn, { backgroundColor: '#F0F4FF', marginTop: 10 }]}
+                onPress={async () => {
+                  Alert.alert(
+                    'Muat Data Awal',
+                    'Muat ulang data profil "Save 1" (44 pemain, formasi 4-3-3, 4 tim, watchlist)?',
+                    [
+                      { text: 'Batal', style: 'cancel' },
+                      {
+                        text: 'Muat',
+                        onPress: async () => {
+                          await seedData();
+                          Alert.alert('Sukses', 'Data Save 1 berhasil dimuat!');
+                        },
+                      },
+                    ]
+                  );
+                }}>
+                <Text style={[styles.toolBtnText, { color: '#0A1128' }]}>
+                  ⚡ Muat Ulang Data Awal (Save 1)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+      )}
+
+      {/* ═══════════════════════════════════════════════ */}
+      {/* ─── MENU 4: TENTANG & DEVELOPER ─────────────── */}
+      {/* ═══════════════════════════════════════════════ */}
+      {activeMenu === 'about' && (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          {/* Developer Card */}
+          <View style={styles.devCard}>
+            <View style={styles.devHeaderRow}>
+              <Text style={styles.devTag}>APP CREATOR & DEVELOPER</Text>
+              <View style={styles.devVerBadge}>
+                <Text style={styles.devVerText}>v1.0</Text>
+              </View>
+            </View>
+            <Text style={styles.devName}>Irwan Firmanto</Text>
+            <Text style={styles.devSub}>FC 26 Career Mode Manager • Personal iOS Edition</Text>
+          </View>
+
+          {/* App Info Card */}
+          <View style={[styles.toolsCard, { marginTop: 14 }]}>
+            <Text style={styles.toolsTitle}>TENTANG APLIKASI</Text>
+            <Text style={styles.aboutDesc}>
+              Aplikasi pendamping Career Mode EA Sports FC 26 untuk mengelola seluruh data skuad, formasi kustom, status pemain, dan penyusunan otomatis starting XI Tim 1–4 serta tim tambahan tanpa batas.
+            </Text>
+
+            <View style={styles.featureItem}>
+              <Text style={styles.featureBullet}>⚡</Text>
+              <Text style={styles.featureText}>
+                <Text style={{ fontWeight: '800' }}>Auto-Generate Team Sheet:</Text> Algoritma multi-tier pintar yang memprioritaskan OVR tertinggi, status aktif, posisi utama & sekunder, serta rotasi cerdas.
+              </Text>
+            </View>
+
+            <View style={styles.featureItem}>
+              <Text style={styles.featureBullet}>⚽</Text>
+              <Text style={styles.featureText}>
+                <Text style={{ fontWeight: '800' }}>24 Preset Formasi Resmi:</Text> Pustaka taktik lengkap 4-Bek, 3-Bek, dan 5-Bek dengan penyesuaian visual lapangan.
+              </Text>
+            </View>
+
+            <View style={styles.featureItem}>
+              <Text style={styles.featureBullet}>🎯</Text>
+              <Text style={styles.featureText}>
+                <Text style={{ fontWeight: '800' }}>Transfer Watchlist & Kuota Posisi:</Text> Monitor keseimbangan skuad real-time dan perencanaan transfer pemain.
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
       )}
 
       {/* ─── ADD/EDIT WATCHLIST MODAL ───────────────── */}
@@ -663,7 +728,7 @@ export default function ProfileScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.modalCenter}>
             <Pressable style={styles.formModalCard} onPress={(e) => e.stopPropagation()}>
-              <Text style={styles.modalTitle}>PROFIL BARU</Text>
+              <Text style={styles.modalTitle}>SAVE PROFIL BARU</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="Nama save (misal: Save 2)"
@@ -701,7 +766,7 @@ export default function ProfileScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.modalCenter}>
             <Pressable style={styles.formModalCard} onPress={(e) => e.stopPropagation()}>
-              <Text style={styles.modalTitle}>GANTI NAMA</Text>
+              <Text style={styles.modalTitle}>GANTI NAMA SAVE</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="Nama save baru"
@@ -818,31 +883,31 @@ const styles = StyleSheet.create({
     color: '#666',
   },
 
-  // Segment Tabs
-  segmentTabs: {
+  // 4 Menu Segment Tabs
+  menuSegmentBar: {
     flexDirection: 'row',
     borderBottomWidth: 3,
     borderBottomColor: '#000',
     backgroundColor: '#FAFAFA',
   },
-  segmentTab: {
+  menuSegmentBtn: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: 'center',
     borderRightWidth: 1,
     borderRightColor: '#DDD',
     backgroundColor: '#F0F0F0',
   },
-  segmentTabActive: {
+  menuSegmentBtnActive: {
     backgroundColor: '#0A1128',
   },
-  segmentTabText: {
-    fontSize: 12,
+  menuSegmentText: {
+    fontSize: 10,
     fontWeight: '900',
     color: '#666',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
-  segmentTabTextActive: {
+  menuSegmentTextActive: {
     color: '#FFFFFF',
   },
 
@@ -946,7 +1011,6 @@ const styles = StyleSheet.create({
 
   // Developer Card
   devCard: {
-    marginTop: 16,
     borderWidth: 3,
     borderColor: '#000',
     backgroundColor: '#0A1128',
@@ -990,6 +1054,27 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#E0E0E0',
     marginTop: 4,
+  },
+  aboutDesc: {
+    fontSize: 12,
+    color: '#444',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  featureBullet: {
+    fontSize: 14,
+    marginRight: 8,
+    marginTop: 1,
+  },
+  featureText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#333',
+    lineHeight: 17,
   },
 
   // Empty state
@@ -1056,7 +1141,7 @@ const styles = StyleSheet.create({
   toolBtn: {
     borderWidth: 1.5,
     borderColor: '#000',
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     backgroundColor: '#FFF',
     marginBottom: 8,

@@ -249,7 +249,7 @@ export default function HomeScreen() {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>TRANSFER WATCHLIST</Text>
           <TouchableOpacity onPress={() => router.push('/(tabs)/profile' as any)}>
-            <Text style={styles.seeAllText}>Kelola di Profil ➔</Text>
+            <Text style={styles.seeAllText}>Kelola di Menu Lainnya ➔</Text>
           </TouchableOpacity>
         </View>
 

@@ -573,6 +573,65 @@ export default function SquadsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* ─── Kebutuhan Posisi Kosong Skuad ──────── */}
+        {currentSquad.starters.length > 0 && (
+          (() => {
+            const emptyStarters = currentSquad.starters.filter((s) => !s.player_id);
+            if (emptyStarters.length === 0) {
+              return (
+                <View style={styles.fullSquadCard}>
+                  <Text style={styles.fullSquadText}>
+                    ✅ 11/11 Starting XI Terisi Lengkap ({currentSquad.avg_ovr ? `AVG ${currentSquad.avg_ovr}` : 'Siap Bertanding'})
+                  </Text>
+                </View>
+              );
+            }
+
+            const emptyCountMap = new Map<string, { count: number; sampleSlot: typeof currentSquad.starters[0] }>();
+            for (const s of emptyStarters) {
+              const pos = s.position_nama ?? 'POS';
+              const curr = emptyCountMap.get(pos);
+              if (curr) {
+                curr.count += 1;
+              } else {
+                emptyCountMap.set(pos, { count: 1, sampleSlot: s });
+              }
+            }
+
+            return (
+              <View style={styles.emptyNeedsCard}>
+                <View style={styles.emptyNeedsHeader}>
+                  <Text style={styles.emptyNeedsTitle}>
+                    ⚠️ KEBUTUHAN FORMASI ({emptyStarters.length} SLOT KOSONG)
+                  </Text>
+                  <Text style={styles.emptyNeedsSub}>
+                    Tap posisi di bawah untuk langsung isi pemain yang sesuai:
+                  </Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {Array.from(emptyCountMap.entries()).map(([posName, data]) => (
+                      <TouchableOpacity
+                        key={posName}
+                        style={styles.emptyPosBadge}
+                        onPress={() => {
+                          setSelectedSlot(data.sampleSlot);
+                          setIsPickingForBench(false);
+                          setShowPlayerPicker(true);
+                        }}
+                        activeOpacity={0.8}>
+                        <Text style={styles.emptyPosBadgeText}>
+                          + ISI {data.count}x {posName}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+            );
+          })()
+        )}
+
         {/* ─── Pitch View / Starting XI ───────────── */}
         {currentSquad.starters.length === 0 ? (
           <View style={styles.noFormationCard}>
@@ -1544,6 +1603,61 @@ const styles = StyleSheet.create({
   },
   formPickChipTextActive: {
     color: '#D4AF37',
+  },
+  emptyNeedsCard: {
+    backgroundColor: '#FFFBE6',
+    borderWidth: 2,
+    borderColor: '#B06000',
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
+  },
+  emptyNeedsHeader: {
+    marginBottom: 4,
+  },
+  emptyNeedsTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#B06000',
+    letterSpacing: 0.5,
+  },
+  emptyNeedsSub: {
+    fontSize: 10,
+    color: '#666',
+    marginTop: 2,
+  },
+  emptyPosBadge: {
+    backgroundColor: '#0A1128',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1.5,
+    borderColor: '#000',
+  },
+  emptyPosBadgeText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#D4AF37',
+    letterSpacing: 0.5,
+  },
+  fullSquadCard: {
+    backgroundColor: '#E6F4EA',
+    borderWidth: 1.5,
+    borderColor: '#0A8754',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginHorizontal: 16,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  fullSquadText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0A8754',
   },
   manualTipBanner: {
     backgroundColor: '#F0F4FF',

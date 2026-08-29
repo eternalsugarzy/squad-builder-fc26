@@ -1281,11 +1281,11 @@ const styles = StyleSheet.create({
   // Floating Button (Circular Plus)
   fabAdd: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 96 : 76,
+    bottom: Platform.OS === 'ios' ? 68 : 50,
     right: 20,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#0A1128',
     justifyContent: 'center',
     alignItems: 'center',
