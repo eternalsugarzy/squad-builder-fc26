@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useProfile } from '@/src/contexts/ProfileContext';
 import {
   listSquadsWithDetails,
@@ -56,6 +57,7 @@ interface SwapTarget {
 
 export default function SquadsScreen() {
   const { activeProfile } = useProfile();
+  const params = useLocalSearchParams<{ squadId?: string; tier?: string }>();
 
   const [squads, setSquads] = useState<SquadFull[]>([]);
   const [activeTier, setActiveTier] = useState<number>(1);
@@ -63,6 +65,21 @@ export default function SquadsScreen() {
   const [playstyles, setPlaystyles] = useState<Playstyle[]>([]);
   const [allPlayers, setAllPlayers] = useState<PlayerWithPositions[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Handle incoming squad navigation from Home screen
+  useEffect(() => {
+    if (params.tier) {
+      const t = parseInt(params.tier, 10);
+      if (!isNaN(t)) {
+        setActiveTier(t);
+      }
+    } else if (params.squadId && squads.length > 0) {
+      const match = squads.find((s) => s.id === params.squadId);
+      if (match) {
+        setActiveTier(match.tier_order);
+      }
+    }
+  }, [params.tier, params.squadId, squads]);
 
   // Auto-Generate State
   const [showAutoGenerateModal, setShowAutoGenerateModal] = useState(false);

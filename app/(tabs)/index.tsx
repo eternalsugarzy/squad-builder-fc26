@@ -176,7 +176,12 @@ export default function HomeScreen() {
             <TouchableOpacity
               key={sq.id}
               style={styles.squadCard}
-              onPress={() => router.push('/(tabs)/squads')}
+              onPress={() =>
+                router.push({
+                  pathname: '/(tabs)/squads',
+                  params: { squadId: sq.id, tier: String(sq.tier_order) },
+                })
+              }
               activeOpacity={0.8}>
               <View style={styles.squadCardTop}>
                 <Text style={styles.squadCardTier}>TIM {sq.tier_order}</Text>
