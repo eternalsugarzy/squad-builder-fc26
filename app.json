@@ -2,6 +2,7 @@
   "expo": {
     "name": "fc26-career-manager",
     "slug": "fc26-career-manager",
+    "owner": "eternalsugarzy",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -44,6 +45,18 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3fb1d7ee-8ec1-4002-aab1-3a2bd169aa82"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3fb1d7ee-8ec1-4002-aab1-3a2bd169aa82"
     }
   }
 }
