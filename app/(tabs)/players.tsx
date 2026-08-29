@@ -58,6 +58,10 @@ export default function PlayersScreen() {
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<SortOption>('ovr_desc');
 
+  // Filter Modals
+  const [showPosFilterModal, setShowPosFilterModal] = useState(false);
+  const [showStatusFilterModal, setShowStatusFilterModal] = useState(false);
+
   // Handle incoming status parameter from Home screen
   useEffect(() => {
     if (params.status) {
@@ -138,15 +142,53 @@ export default function PlayersScreen() {
       });
   }, [players, searchQuery, filterPos, filterStatus, sortBy]);
 
-  // ─── Quick OVR ──────────────────────────────────
+  // Categorized Positions for the Position Filter Modal
+  const gkPositions = useMemo(() => positions.filter((p) => p.nama.toUpperCase() === 'GK'), [positions]);
+  const defPositions = useMemo(
+    () => positions.filter((p) => ['LB', 'CB', 'RB', 'LWB', 'RWB'].includes(p.nama.toUpperCase())),
+    [positions]
+  );
+  const midPositions = useMemo(
+    () => positions.filter((p) => ['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(p.nama.toUpperCase())),
+    [positions]
+  );
+  const attPositions = useMemo(
+    () => positions.filter((p) => ['LW', 'RW', 'ST', 'CF', 'LF', 'RF'].includes(p.nama.toUpperCase())),
+    [positions]
+  );
+  const otherPositions = useMemo(
+    () =>
+      positions.filter(
+        (p) =>
+          !['GK', 'LB', 'CB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF', 'LF', 'RF'].includes(
+            p.nama.toUpperCase()
+          )
+      ),
+    [positions]
+  );
+
+  const selectedPosObj = positions.find((p) => p.id === filterPos);
+  const selectedPosLabel = filterPos === 'ALL' ? 'Semua Posisi' : selectedPosObj?.nama ?? 'Posisi';
+  const selectedStatusLabel =
+    filterStatus === 'ALL'
+      ? 'Semua Status'
+      : (STATUS_CONFIG[filterStatus as PlayerStatus]?.label ?? filterStatus.toUpperCase());
+
+  // ─── Quick OVR Stepper ────────────────────────────
   async function handleQuickOvr(playerId: string, delta: number) {
     try {
-      const newOvr = await quickChangeOvr(playerId, delta);
+      await quickChangeOvr(playerId, delta);
       setPlayers((prev) =>
-        prev.map((p) => (p.id === playerId ? { ...p, ovr_current: newOvr } : p))
+        prev.map((p) => {
+          if (p.id === playerId) {
+            const nextOvr = Math.min(99, Math.max(1, p.ovr_current + delta));
+            return { ...p, ovr_current: nextOvr };
+          }
+          return p;
+        })
       );
     } catch (e) {
-      console.error('Quick OVR error:', e);
+      Alert.alert('Error', 'Gagal mengubah OVR');
     }
   }
 
@@ -371,7 +413,7 @@ export default function PlayersScreen() {
           style={styles.cardMain}
           onPress={() => (isBulkMode ? toggleSelectPlayer(item.id) : openEdit(item))}
           activeOpacity={0.7}>
-          {/* Left OVR badge (FIFA card inspired) */}
+          {/* Left OVR badge */}
           <View style={styles.ovrBadge}>
             <Text style={styles.ovrNumber}>{item.ovr_current}</Text>
             <Text style={styles.primaryPosText}>{primaryPos}</Text>
@@ -426,84 +468,104 @@ export default function PlayersScreen() {
     );
   }
 
+  const hasActiveFilter = filterPos !== 'ALL' || filterStatus !== 'ALL' || searchQuery.trim().length > 0;
+
   return (
     <View style={styles.container}>
-      {/* Top Search & Filter Bar */}
+      {/* ─── Top Search & Bulk Bar ─────────────────── */}
       <View style={styles.topBar}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Cari nama pemain..."
-          placeholderTextColor="#888"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
+        <View style={styles.searchWrapper}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Cari nama pemain..."
+            placeholderTextColor="#888"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.trim().length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.searchClearBtn}>
+              <Text style={styles.searchClearText}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         <TouchableOpacity
           style={[styles.bulkToggleBtn, isBulkMode && styles.bulkToggleBtnActive]}
           onPress={() => {
             setIsBulkMode(!isBulkMode);
             setSelectedIds(new Set());
           }}>
-          <Text
-            style={[
-              styles.bulkToggleText,
-              isBulkMode && styles.bulkToggleTextActive,
-            ]}>
+          <Text style={[styles.bulkToggleText, isBulkMode && styles.bulkToggleTextActive]}>
             {isBulkMode ? 'SELESAI' : 'BULK OVR'}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Position Filter Pills (Horizontal Scroll) */}
-      <View style={styles.filterRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsScroll}>
-          <TouchableOpacity
-            style={[styles.pill, filterPos === 'ALL' && styles.pillActive]}
-            onPress={() => setFilterPos('ALL')}>
-            <Text style={[styles.pillText, filterPos === 'ALL' && styles.pillTextActive]}>
-              SEMUA POSISI
+      {/* ─── Big Dual-Filter Selector Bar ──────────── */}
+      <View style={styles.dualFilterRow}>
+        {/* Position Filter Button */}
+        <TouchableOpacity
+          style={[styles.bigFilterBtn, filterPos !== 'ALL' && styles.bigFilterBtnActive]}
+          onPress={() => setShowPosFilterModal(true)}
+          activeOpacity={0.8}>
+          <Text style={styles.bigFilterLabel}>POSISI:</Text>
+          <View style={styles.bigFilterValRow}>
+            <Text style={[styles.bigFilterValue, filterPos !== 'ALL' && styles.bigFilterValueActive]} numberOfLines={1}>
+              {selectedPosLabel}
             </Text>
-          </TouchableOpacity>
-          {positions.map((pos) => (
-            <TouchableOpacity
-              key={pos.id}
-              style={[styles.pill, filterPos === pos.id && styles.pillActive]}
-              onPress={() => setFilterPos(pos.id)}>
-              <Text style={[styles.pillText, filterPos === pos.id && styles.pillTextActive]}>
-                {pos.nama}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+            <Text style={[styles.bigFilterArrow, filterPos !== 'ALL' && styles.bigFilterArrowActive]}>▾</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Status Filter Button */}
+        <TouchableOpacity
+          style={[styles.bigFilterBtn, filterStatus !== 'ALL' && styles.bigFilterBtnActive]}
+          onPress={() => setShowStatusFilterModal(true)}
+          activeOpacity={0.8}>
+          <Text style={styles.bigFilterLabel}>STATUS:</Text>
+          <View style={styles.bigFilterValRow}>
+            <Text style={[styles.bigFilterValue, filterStatus !== 'ALL' && styles.bigFilterValueActive]} numberOfLines={1}>
+              {selectedStatusLabel}
+            </Text>
+            <Text style={[styles.bigFilterArrow, filterStatus !== 'ALL' && styles.bigFilterArrowActive]}>▾</Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
-      {/* Status Filter & Sort Row */}
-      <View style={styles.filterRowSecondary}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsScroll}>
-          <TouchableOpacity
-            style={[styles.statusPill, filterStatus === 'ALL' && styles.statusPillActive]}
-            onPress={() => setFilterStatus('ALL')}>
-            <Text style={[styles.statusPillText, filterStatus === 'ALL' && styles.statusPillTextActive]}>
-              Semua Status
-            </Text>
-          </TouchableOpacity>
-          {(['aktif', 'loan_out', 'injured', 'akan_dijual', 'sudah_dijual'] as PlayerStatus[]).map((st) => (
-            <TouchableOpacity
-              key={st}
-              style={[styles.statusPill, filterStatus === st && styles.statusPillActive]}
-              onPress={() => setFilterStatus(st)}>
-              <Text style={[styles.statusPillText, filterStatus === st && styles.statusPillTextActive]}>
-                {STATUS_CONFIG[st].label}
-              </Text>
+      {/* ─── Active Filter Tags Bar (If Any Active) ─── */}
+      {hasActiveFilter && (
+        <View style={styles.activeFilterTagsRow}>
+          <Text style={styles.activeFilterLead}>FILTER:</Text>
+          {filterPos !== 'ALL' && (
+            <TouchableOpacity style={styles.activeFilterTag} onPress={() => setFilterPos('ALL')}>
+              <Text style={styles.activeFilterTagText}>Posisi: {selectedPosLabel} ✕</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+          )}
+          {filterStatus !== 'ALL' && (
+            <TouchableOpacity style={styles.activeFilterTag} onPress={() => setFilterStatus('ALL')}>
+              <Text style={styles.activeFilterTagText}>Status: {selectedStatusLabel} ✕</Text>
+            </TouchableOpacity>
+          )}
+          {searchQuery.trim().length > 0 && (
+            <TouchableOpacity style={styles.activeFilterTag} onPress={() => setSearchQuery('')}>
+              <Text style={styles.activeFilterTagText}>"{searchQuery}" ✕</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.resetAllFilterBtn}
+            onPress={() => {
+              setFilterPos('ALL');
+              setFilterStatus('ALL');
+              setSearchQuery('');
+            }}>
+            <Text style={styles.resetAllFilterText}>Reset 🔄</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      {/* Sort selection bar */}
+      {/* ─── Sort selection bar ─────────────────────── */}
       <View style={styles.sortBar}>
-        <Text style={styles.countText}>
-          {filteredPlayers.length} PEMAIN
-        </Text>
+        <Text style={styles.countText}>{filteredPlayers.length} PEMAIN</Text>
         <View style={styles.sortBtns}>
           <TouchableOpacity
             style={[styles.sortBtn, sortBy === 'ovr_desc' && styles.sortBtnActive]}
@@ -576,26 +638,292 @@ export default function PlayersScreen() {
       ) : filteredPlayers.length === 0 ? (
         <View style={styles.emptyList}>
           <Text style={styles.emptyListText}>Tidak ada pemain ditemukan</Text>
+          {hasActiveFilter && (
+            <TouchableOpacity
+              style={styles.emptyResetBtn}
+              onPress={() => {
+                setFilterPos('ALL');
+                setFilterStatus('ALL');
+                setSearchQuery('');
+              }}>
+              <Text style={styles.emptyResetText}>RESET FILTER</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <FlatList
           data={filteredPlayers}
-          renderItem={renderPlayerCard}
           keyExtractor={(item) => item.id}
+          renderItem={renderPlayerCard}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
       )}
 
-      {/* Floating Add Player Button (Round Plus) */}
+      {/* Floating Button (Circular Plus) */}
       {!isBulkMode && (
         <TouchableOpacity style={styles.fabAdd} onPress={openAdd} activeOpacity={0.8}>
           <Text style={styles.fabAddIcon}>+</Text>
         </TouchableOpacity>
       )}
 
-      {/* ─── ADD MODAL ──────────────────────────────── */}
-      <Modal visible={showAddModal} transparent animationType="slide" onRequestClose={() => setShowAddModal(false)}>
+      {/* ─── POSITION FILTER MODAL (ORGANIZED GRID) ── */}
+      <Modal
+        visible={showPosFilterModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPosFilterModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowPosFilterModal(false)}>
+          <View style={styles.filterModalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>PILIH FILTER POSISI</Text>
+              <TouchableOpacity onPress={() => setShowPosFilterModal(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              {/* Option: Semua Posisi */}
+              <TouchableOpacity
+                style={[styles.posGroupAllBtn, filterPos === 'ALL' && styles.posGroupAllBtnActive]}
+                onPress={() => {
+                  setFilterPos('ALL');
+                  setShowPosFilterModal(false);
+                }}>
+                <Text style={[styles.posGroupAllText, filterPos === 'ALL' && styles.posGroupAllTextActive]}>
+                  🔘 SEMUA POSISI ({players.length} Pemain)
+                </Text>
+              </TouchableOpacity>
+
+              {/* Group: Kiper */}
+              {gkPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>🧤 PENJAGA GAWANG</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {gkPositions.map((pos) => {
+                      const count = players.filter((p) => p.positions.some((pp) => pp.id === pos.id)).length;
+                      const isSelected = filterPos === pos.id;
+                      return (
+                        <TouchableOpacity
+                          key={pos.id}
+                          style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
+                          onPress={() => {
+                            setFilterPos(pos.id);
+                            setShowPosFilterModal(false);
+                          }}>
+                          <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
+                            {pos.nama}
+                          </Text>
+                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
+                            {count}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Group: Bek */}
+              {defPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>🛡️ BEK / DEFENDER</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {defPositions.map((pos) => {
+                      const count = players.filter((p) => p.positions.some((pp) => pp.id === pos.id)).length;
+                      const isSelected = filterPos === pos.id;
+                      return (
+                        <TouchableOpacity
+                          key={pos.id}
+                          style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
+                          onPress={() => {
+                            setFilterPos(pos.id);
+                            setShowPosFilterModal(false);
+                          }}>
+                          <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
+                            {pos.nama}
+                          </Text>
+                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
+                            {count}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Group: Gelandang */}
+              {midPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>⚙️ GELANDANG / MIDFIELD</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {midPositions.map((pos) => {
+                      const count = players.filter((p) => p.positions.some((pp) => pp.id === pos.id)).length;
+                      const isSelected = filterPos === pos.id;
+                      return (
+                        <TouchableOpacity
+                          key={pos.id}
+                          style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
+                          onPress={() => {
+                            setFilterPos(pos.id);
+                            setShowPosFilterModal(false);
+                          }}>
+                          <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
+                            {pos.nama}
+                          </Text>
+                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
+                            {count}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Group: Penyerang */}
+              {attPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>⚡ PENYERANG / ATTACK</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {attPositions.map((pos) => {
+                      const count = players.filter((p) => p.positions.some((pp) => pp.id === pos.id)).length;
+                      const isSelected = filterPos === pos.id;
+                      return (
+                        <TouchableOpacity
+                          key={pos.id}
+                          style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
+                          onPress={() => {
+                            setFilterPos(pos.id);
+                            setShowPosFilterModal(false);
+                          }}>
+                          <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
+                            {pos.nama}
+                          </Text>
+                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
+                            {count}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Other positions */}
+              {otherPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>LAINNYA</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {otherPositions.map((pos) => {
+                      const count = players.filter((p) => p.positions.some((pp) => pp.id === pos.id)).length;
+                      const isSelected = filterPos === pos.id;
+                      return (
+                        <TouchableOpacity
+                          key={pos.id}
+                          style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
+                          onPress={() => {
+                            setFilterPos(pos.id);
+                            setShowPosFilterModal(false);
+                          }}>
+                          <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
+                            {pos.nama}
+                          </Text>
+                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
+                            {count}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalBottomBtn}
+              onPress={() => setShowPosFilterModal(false)}>
+              <Text style={styles.modalBottomBtnText}>TUTUP</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ─── STATUS FILTER MODAL (ORGANIZED LIST) ──── */}
+      <Modal
+        visible={showStatusFilterModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowStatusFilterModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowStatusFilterModal(false)}>
+          <View style={styles.filterModalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>PILIH FILTER STATUS</Text>
+              <TouchableOpacity onPress={() => setShowStatusFilterModal(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 8, marginVertical: 8 }}>
+              {/* Option: Semua Status */}
+              <TouchableOpacity
+                style={[styles.statusChoiceRow, filterStatus === 'ALL' && styles.statusChoiceRowActive]}
+                onPress={() => {
+                  setFilterStatus('ALL');
+                  setShowStatusFilterModal(false);
+                }}>
+                <Text style={[styles.statusChoiceName, filterStatus === 'ALL' && styles.statusChoiceNameActive]}>
+                  🔘 Semua Status
+                </Text>
+                <Text style={[styles.statusChoiceCount, filterStatus === 'ALL' && styles.statusChoiceCountActive]}>
+                  {players.length} Pemain
+                </Text>
+              </TouchableOpacity>
+
+              {(['aktif', 'loan_out', 'injured', 'akan_dijual', 'sudah_dijual'] as PlayerStatus[]).map((st) => {
+                const count = players.filter((p) => p.status === st).length;
+                const isSelected = filterStatus === st;
+                const cfg = STATUS_CONFIG[st];
+
+                return (
+                  <TouchableOpacity
+                    key={st}
+                    style={[styles.statusChoiceRow, isSelected && styles.statusChoiceRowActive]}
+                    onPress={() => {
+                      setFilterStatus(st);
+                      setShowStatusFilterModal(false);
+                    }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={[styles.statusChoiceBadge, { backgroundColor: cfg.bg }]}>
+                        <Text style={[styles.statusChoiceBadgeText, { color: cfg.text }]}>
+                          {cfg.label}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.statusChoiceCount, isSelected && styles.statusChoiceCountActive]}>
+                      {count} Pemain
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalBottomBtn}
+              onPress={() => setShowStatusFilterModal(false)}>
+              <Text style={styles.modalBottomBtnText}>TUTUP</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ─── ADD PLAYER MODAL ───────────────────────── */}
+      <Modal
+        visible={showAddModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowAddModal(false)}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalCenter}>
             <Pressable style={styles.formModalCard} onPress={(e) => e.stopPropagation()}>
@@ -711,15 +1039,15 @@ export default function PlayersScreen() {
                   </View>
                 )}
 
-                {/* Notes */}
-                <Text style={styles.inputLabel}>CATATAN (Opsional)</Text>
+                {/* Catatan */}
+                <Text style={styles.inputLabel}>CATATAN (OPSIONAL)</Text>
                 <TextInput
-                  style={styles.modalInput}
-                  placeholder="Catatan status..."
+                  style={[styles.modalInput, { height: 60 }]}
+                  placeholder="Catatan pemain..."
                   placeholderTextColor="#999"
                   value={formCatatan}
                   onChangeText={setFormCatatan}
-                  maxLength={100}
+                  multiline
                 />
               </ScrollView>
 
@@ -736,8 +1064,12 @@ export default function PlayersScreen() {
         </Pressable>
       </Modal>
 
-      {/* ─── EDIT MODAL ─────────────────────────────── */}
-      <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => setShowEditModal(false)}>
+      {/* ─── EDIT PLAYER MODAL ───────────────────────── */}
+      <Modal
+        visible={showEditModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEditModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowEditModal(false)}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalCenter}>
             <Pressable style={styles.formModalCard} onPress={(e) => e.stopPropagation()}>
@@ -745,16 +1077,18 @@ export default function PlayersScreen() {
                 <Text style={styles.modalTitle}>EDIT PEMAIN</Text>
                 {editPlayer && (
                   <TouchableOpacity onPress={() => handleDelete(editPlayer)}>
-                    <Text style={styles.deleteLinkText}>HAPUS 🗑️</Text>
+                    <Text style={styles.deleteLinkText}>🗑️ Hapus</Text>
                   </TouchableOpacity>
                 )}
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
                 {/* Name */}
                 <Text style={styles.inputLabel}>NAMA PEMAIN</Text>
                 <TextInput
                   style={styles.modalInput}
+                  placeholder="Nama Pemain"
+                  placeholderTextColor="#999"
                   value={formNama}
                   onChangeText={setFormNama}
                   maxLength={50}
@@ -787,7 +1121,7 @@ export default function PlayersScreen() {
 
                 {/* Position Multi-select */}
                 <Text style={styles.inputLabel}>
-                  POSISI (Tap toggle, Long-press set UTAMA ★)
+                  POSISI (Tap untuk toggle, Long press = UTAMA)
                 </Text>
                 <View style={styles.positionsSelectGrid}>
                   {positions.map((pos) => {
@@ -859,50 +1193,45 @@ export default function PlayersScreen() {
                   </View>
                 )}
 
-                {/* Notes */}
+                {/* Catatan */}
                 <Text style={styles.inputLabel}>CATATAN</Text>
                 <TextInput
-                  style={styles.modalInput}
+                  style={[styles.modalInput, { height: 60 }]}
                   placeholder="Catatan..."
                   placeholderTextColor="#999"
                   value={formCatatan}
                   onChangeText={setFormCatatan}
-                  maxLength={100}
+                  multiline
                 />
 
-                {/* OVR History Timeline */}
-                <Text style={[styles.inputLabel, { marginTop: 16 }]}>
-                  RIWAYAT PERUBAHAN OVR
-                </Text>
-                {ovrHistoryList.length === 0 ? (
-                  <Text style={styles.historyEmpty}>Belum ada riwayat perubahan OVR</Text>
-                ) : (
-                  <View style={styles.historyList}>
-                    {ovrHistoryList.map((hist) => (
-                      <View key={hist.id} style={styles.historyItem}>
-                        <Text style={styles.historyOvr}>
-                          {hist.ovr_lama} →{' '}
-                          <Text style={{ fontWeight: '900', color: hist.ovr_baru >= hist.ovr_lama ? '#137333' : '#C5221F' }}>
-                            {hist.ovr_baru}
+                {/* OVR History */}
+                {ovrHistoryList.length > 0 && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.inputLabel}>RIWAYAT PERUBAHAN OVR</Text>
+                    <View style={styles.historyBox}>
+                      {ovrHistoryList.map((h) => (
+                        <View key={h.id} style={styles.historyRow}>
+                          <Text style={styles.historyDate}>
+                            {new Date(h.tanggal).toLocaleDateString('id-ID')}
                           </Text>
-                        </Text>
-                        <Text style={styles.historyDate}>
-                          {new Date(hist.tanggal).toLocaleDateString('id-ID', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </Text>
-                      </View>
-                    ))}
+                          <Text style={styles.historyChange}>
+                            {h.ovr_lama} ➔ {h.ovr_baru} (
+                            {h.ovr_baru - h.ovr_lama > 0 ? `+${h.ovr_baru - h.ovr_lama}` : h.ovr_baru - h.ovr_lama})
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
                 )}
               </ScrollView>
 
               <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowEditModal(false)}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => {
+                    setShowEditModal(false);
+                    setEditPlayer(null);
+                  }}>
                   <Text style={styles.modalCancelText}>BATAL</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleSaveEdit}>
@@ -926,118 +1255,177 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    padding: 32,
+    backgroundColor: '#FFFFFF',
   },
   emptyIcon: {
     fontSize: 48,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '800',
-    color: '#0A1128',
-    marginBottom: 8,
-  },
-  emptyHint: {
-    fontSize: 14,
-    color: '#888',
-    textAlign: 'center',
-  },
-
-  // Top Bar
-  topBar: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-    gap: 8,
-    backgroundColor: '#FAFAFA',
-  },
-  searchInput: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: '#000',
-    backgroundColor: '#FFF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0A1128',
-  },
-  bulkToggleBtn: {
-    borderWidth: 2,
-    borderColor: '#000',
-    paddingHorizontal: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-  },
-  bulkToggleBtnActive: {
-    backgroundColor: '#D4AF37',
-  },
-  bulkToggleText: {
-    fontSize: 12,
     fontWeight: '900',
     color: '#0A1128',
     letterSpacing: 1,
   },
-  bulkToggleTextActive: {
-    color: '#000',
+  emptyHint: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 6,
   },
 
-  // Pills Row
-  filterRow: {
-    backgroundColor: '#FAFAFA',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    paddingVertical: 6,
-  },
-  filterRowSecondary: {
-    backgroundColor: '#FAFAFA',
-    borderBottomWidth: 2,
-    borderBottomColor: '#000',
-    paddingVertical: 4,
-  },
-  pillsScroll: {
+  // Top Search Bar
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    gap: 6,
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: '#FFFFFF',
+    gap: 8,
   },
-  pill: {
+  searchWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 2,
     borderColor: '#000',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: '#FFF',
+    backgroundColor: '#FAFAFA',
   },
-  pillActive: {
-    backgroundColor: '#0A1128',
-  },
-  pillText: {
-    fontSize: 12,
-    fontWeight: '800',
+  searchInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    fontWeight: '700',
     color: '#0A1128',
   },
-  pillTextActive: {
-    color: '#FFF',
+  searchClearBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
-  statusPill: {
-    borderWidth: 1,
-    borderColor: '#CCC',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    backgroundColor: '#FFF',
+  searchClearText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#888',
   },
-  statusPillActive: {
+  bulkToggleBtn: {
+    backgroundColor: '#FAFAFA',
+    borderWidth: 2,
     borderColor: '#000',
-    backgroundColor: '#D4AF37',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
   },
-  statusPillText: {
+  bulkToggleBtnActive: {
+    backgroundColor: '#0A1128',
+  },
+  bulkToggleText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '900',
+    color: '#0A1128',
+    letterSpacing: 0.5,
+  },
+  bulkToggleTextActive: {
+    color: '#D4AF37',
+  },
+
+  // Big Dual Filter Buttons
+  dualFilterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 8,
+    marginBottom: 8,
+  },
+  bigFilterBtn: {
+    flex: 1,
+    backgroundColor: '#FAFAFA',
+    borderWidth: 2,
+    borderColor: '#000',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
+  },
+  bigFilterBtnActive: {
+    backgroundColor: '#F0F4FF',
+    borderColor: '#0A1128',
+  },
+  bigFilterLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#888',
+    letterSpacing: 0.5,
+  },
+  bigFilterValRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  bigFilterValue: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0A1128',
+    flex: 1,
+  },
+  bigFilterValueActive: {
+    color: '#0A1128',
+  },
+  bigFilterArrow: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#888',
+    marginLeft: 4,
+  },
+  bigFilterArrowActive: {
+    color: '#0A1128',
+  },
+
+  // Active Filter Tags Bar
+  activeFilterTagsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    gap: 6,
+    marginBottom: 8,
+  },
+  activeFilterLead: {
+    fontSize: 10,
+    fontWeight: '900',
     color: '#666',
   },
-  statusPillTextActive: {
-    color: '#000',
+  activeFilterTag: {
+    backgroundColor: '#0A1128',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  activeFilterTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#D4AF37',
+  },
+  resetAllFilterBtn: {
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  resetAllFilterText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#333',
   },
 
   // Sort bar
@@ -1047,15 +1435,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#DDD',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#000',
     backgroundColor: '#F8F9FA',
   },
   countText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
     color: '#0A1128',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   sortBtns: {
     flexDirection: 'row',
@@ -1063,13 +1451,12 @@ const styles = StyleSheet.create({
   },
   sortBtn: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: '#DDD',
+    paddingVertical: 4,
+    borderWidth: 1.5,
+    borderColor: '#000',
     backgroundColor: '#FFF',
   },
   sortBtnActive: {
-    borderColor: '#000',
     backgroundColor: '#0A1128',
   },
   sortBtnText: {
@@ -1078,7 +1465,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   sortBtnTextActive: {
-    color: '#FFF',
+    color: '#D4AF37',
   },
 
   // Bulk Action Bar
@@ -1095,7 +1482,7 @@ const styles = StyleSheet.create({
   bulkSelectAllBtn: {
     paddingVertical: 4,
     paddingHorizontal: 8,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#000',
     backgroundColor: '#FFF',
   },
@@ -1141,7 +1528,7 @@ const styles = StyleSheet.create({
   bulkApplyText: {
     fontSize: 11,
     fontWeight: '900',
-    color: '#FFF',
+    color: '#D4AF37',
   },
 
   // Player List
@@ -1155,7 +1542,21 @@ const styles = StyleSheet.create({
   },
   emptyListText: {
     fontSize: 14,
+    fontWeight: '700',
     color: '#888',
+  },
+  emptyResetBtn: {
+    marginTop: 12,
+    backgroundColor: '#0A1128',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: '#000',
+  },
+  emptyResetText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#D4AF37',
   },
 
   // Player Card
@@ -1167,10 +1568,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAFA',
     marginBottom: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 3, height: 3 },
+    shadowOffset: { width: 2, height: 2 },
     shadowOpacity: 1,
     shadowRadius: 0,
-    elevation: 3,
+    elevation: 2,
   },
   playerCardSelected: {
     backgroundColor: '#FFF9E6',
@@ -1316,7 +1717,7 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
 
-  // Modal
+  // Filter Modals
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1327,6 +1728,168 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
   },
+  filterModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: '#000',
+    padding: 16,
+    width: '92%',
+    maxWidth: 440,
+    shadowColor: '#000',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 8,
+  },
+  filterModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: '#000',
+  },
+  filterModalTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0A1128',
+    letterSpacing: 1,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalCloseBtnText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#666',
+  },
+  posGroupAllBtn: {
+    backgroundColor: '#F0F0F0',
+    borderWidth: 2,
+    borderColor: '#000',
+    padding: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  posGroupAllBtnActive: {
+    backgroundColor: '#0A1128',
+  },
+  posGroupAllText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0A1128',
+  },
+  posGroupAllTextActive: {
+    color: '#D4AF37',
+  },
+  posCategorySection: {
+    marginBottom: 12,
+  },
+  posCategoryHeader: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#888',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  posCategoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  bigPosChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1.5,
+    borderColor: '#000',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minWidth: '31%',
+    flexGrow: 1,
+  },
+  bigPosChipActive: {
+    backgroundColor: '#0A1128',
+    borderColor: '#0A1128',
+  },
+  bigPosChipName: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#0A1128',
+  },
+  bigPosChipNameActive: {
+    color: '#D4AF37',
+  },
+  bigPosChipCount: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#666',
+    marginLeft: 4,
+  },
+  bigPosChipCountActive: {
+    color: '#FFF',
+  },
+  modalBottomBtn: {
+    backgroundColor: '#0A1128',
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+    marginTop: 10,
+  },
+  modalBottomBtnText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+
+  // Status Filter Modal Rows
+  statusChoiceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1.5,
+    borderColor: '#000',
+    padding: 12,
+  },
+  statusChoiceRowActive: {
+    backgroundColor: '#F0F4FF',
+    borderColor: '#0A1128',
+    borderWidth: 2.5,
+  },
+  statusChoiceName: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0A1128',
+  },
+  statusChoiceNameActive: {
+    color: '#0A1128',
+  },
+  statusChoiceBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#DDD',
+  },
+  statusChoiceBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  statusChoiceCount: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '700',
+  },
+  statusChoiceCountActive: {
+    color: '#0A1128',
+    fontWeight: '900',
+  },
+
+  // Form Modals (Add / Edit)
   formModalCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 3,
@@ -1410,15 +1973,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   posSelectChip: {
-    borderWidth: 2,
-    borderColor: '#CCC',
+    borderWidth: 1.5,
+    borderColor: '#DDD',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: '#FFF',
+    backgroundColor: '#FAFAFA',
   },
   posSelectChipSelected: {
-    borderColor: '#000',
-    backgroundColor: '#E6F4EA',
+    borderColor: '#0A1128',
+    backgroundColor: '#E8F0FE',
   },
   posSelectChipPrimary: {
     borderColor: '#000',
@@ -1430,7 +1993,7 @@ const styles = StyleSheet.create({
     color: '#888',
   },
   posSelectChipTextSelected: {
-    color: '#137333',
+    color: '#0A1128',
   },
   posSelectChipTextPrimary: {
     color: '#D4AF37',
@@ -1442,21 +2005,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   statusOption: {
-    borderWidth: 1,
-    borderColor: '#CCC',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    backgroundColor: '#FFF',
+    borderWidth: 1.5,
+    borderColor: '#DDD',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#FAFAFA',
   },
   statusOptionActive: {
-    borderWidth: 2,
     borderColor: '#000',
     backgroundColor: '#D4AF37',
   },
   statusOptionText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
-    color: '#555',
+    color: '#666',
   },
   statusOptionTextActive: {
     color: '#000',
@@ -1468,14 +2030,13 @@ const styles = StyleSheet.create({
   },
   durasiBtn: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#CCC',
-    paddingVertical: 6,
+    borderWidth: 1.5,
+    borderColor: '#DDD',
+    paddingVertical: 8,
     alignItems: 'center',
-    backgroundColor: '#FFF',
+    backgroundColor: '#FAFAFA',
   },
   durasiBtnActive: {
-    borderWidth: 2,
     borderColor: '#000',
     backgroundColor: '#0A1128',
   },
@@ -1485,37 +2046,30 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   durasiBtnTextActive: {
-    color: '#FFF',
+    color: '#D4AF37',
   },
-  historyEmpty: {
-    fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
-    paddingVertical: 6,
-  },
-  historyList: {
-    borderWidth: 1,
+  historyBox: {
+    borderWidth: 1.5,
     borderColor: '#DDD',
     backgroundColor: '#FAFAFA',
     padding: 8,
     marginTop: 4,
   },
-  historyItem: {
+  historyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     paddingVertical: 4,
     borderBottomWidth: 1,
     borderBottomColor: '#EEE',
   },
-  historyOvr: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0A1128',
-  },
   historyDate: {
     fontSize: 11,
-    color: '#888',
+    color: '#666',
+  },
+  historyChange: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0A1128',
   },
   modalActions: {
     flexDirection: 'row',
@@ -1534,7 +2088,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#333',
-    letterSpacing: 1,
   },
   modalConfirmBtn: {
     flex: 1,
@@ -1546,8 +2099,7 @@ const styles = StyleSheet.create({
   },
   modalConfirmText: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#000',
-    letterSpacing: 1,
   },
 });
