@@ -82,6 +82,7 @@ export default function SquadsScreen() {
   // Dropdown Modals
   const [showFormationPicker, setShowFormationPicker] = useState(false);
   const [showPlaystylePicker, setShowPlaystylePicker] = useState(false);
+  const [formationPickerCategory, setFormationPickerCategory] = useState<'All' | '4-Back' | '3-Back' | '5-Back'>('All');
 
   // Rename Squad State
   const [showRenameModal, setShowRenameModal] = useState(false);
@@ -803,87 +804,131 @@ export default function SquadsScreen() {
         currentPlayerId={isPickingForBench ? null : selectedSlot?.player_id}
       />
 
-      {/* ─── FORMATION PICKER MODAL ────────────────── */}
+      {/* ─── FORMATION PICKER MODAL (24 FC26 PRESETS) ─ */}
       <Modal visible={showFormationPicker} transparent animationType="slide" onRequestClose={() => setShowFormationPicker(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowFormationPicker(false)}>
           <View style={styles.pickerModalCard}>
-            <Text style={styles.pickerModalTitle}>PILIH FORMASI</Text>
-            {formations.length === 0 ? (
-              <Text style={styles.pickerEmpty}>Belum ada formasi. Buat di tab Formasi.</Text>
-            ) : (
-              <FlatList
-                data={formations}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
+            <Text style={styles.pickerModalTitle}>PILIH FORMASI FC 26</Text>
+
+            {/* Category Filter */}
+            <View style={styles.pickerCatFilterRow}>
+              {(['All', '4-Back', '3-Back', '5-Back'] as const).map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[
+                    styles.pickerCatChip,
+                    formationPickerCategory === cat && styles.pickerCatChipActive,
+                  ]}
+                  onPress={() => setFormationPickerCategory(cat)}>
+                  <Text
                     style={[
-                      styles.pickerItem,
-                      currentSquad.formation_id === item.id && styles.pickerItemActive,
-                    ]}
-                    onPress={() => handleSelectFormation(item.id)}>
-                    <Text
-                      style={[
-                        styles.pickerItemText,
-                        currentSquad.formation_id === item.id && styles.pickerItemTextActive,
-                      ]}>
-                      {item.nama_formasi} ({item.slots.length} slots)
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              />
-            )}
+                      styles.pickerCatChipText,
+                      formationPickerCategory === cat && styles.pickerCatChipTextActive,
+                    ]}>
+                    {cat === 'All' ? 'SEMUA' : cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              {formations
+                .filter((f) => {
+                  if (formationPickerCategory === 'All') return true;
+                  if (formationPickerCategory === '4-Back') return f.nama_formasi.startsWith('4');
+                  if (formationPickerCategory === '3-Back') return f.nama_formasi.startsWith('3');
+                  if (formationPickerCategory === '5-Back') return f.nama_formasi.startsWith('5');
+                  return true;
+                })
+                .map((f) => {
+                  const isCurrent = currentSquad.formation_id === f.id;
+                  const slotsSummary = f.slots.map((s) => s.slot_label).join(' • ');
+
+                  return (
+                    <TouchableOpacity
+                      key={f.id}
+                      style={[styles.formationPickerCard, isCurrent && styles.formationPickerCardActive]}
+                      onPress={() => handleSelectFormation(f.id)}>
+                      <View style={styles.formationPickerCardTop}>
+                        <Text style={[styles.formationPickerName, isCurrent && styles.formationPickerNameActive]}>
+                          {f.nama_formasi}
+                        </Text>
+                        {isCurrent && (
+                          <View style={styles.activeFormationTag}>
+                            <Text style={styles.activeFormationTagText}>DIPILIH</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.formationPickerSlots} numberOfLines={1}>
+                        {slotsSummary}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+            </ScrollView>
+
             <TouchableOpacity
               style={styles.pickerCloseBtn}
               onPress={() => setShowFormationPicker(false)}>
-              <Text style={styles.pickerCloseText}>BATAL</Text>
+              <Text style={styles.pickerCloseText}>TUTUP</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
       </Modal>
 
-      {/* ─── PLAYSTYLE PICKER MODAL ────────────────── */}
+      {/* ─── PLAYSTYLE PICKER MODAL (8 FC26 VISIONS) ── */}
       <Modal visible={showPlaystylePicker} transparent animationType="slide" onRequestClose={() => setShowPlaystylePicker(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowPlaystylePicker(false)}>
           <View style={styles.pickerModalCard}>
-            <Text style={styles.pickerModalTitle}>PILIH PLAYSTYLE</Text>
-            <TouchableOpacity
-              style={[
-                styles.pickerItem,
-                !currentSquad.playstyle_id && styles.pickerItemActive,
-              ]}
-              onPress={() => handleSelectPlaystyle(null)}>
-              <Text
+            <Text style={styles.pickerModalTitle}>PILIH TACTICAL VISION (PLAYSTYLE)</Text>
+
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              <TouchableOpacity
                 style={[
-                  styles.pickerItemText,
-                  !currentSquad.playstyle_id && styles.pickerItemTextActive,
-                ]}>
-                Tanpa Playstyle
-              </Text>
-            </TouchableOpacity>
-            <FlatList
-              data={playstyles}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
+                  styles.playstylePickerCard,
+                  !currentSquad.playstyle_id && styles.playstylePickerCardActive,
+                ]}
+                onPress={() => handleSelectPlaystyle(null)}>
+                <Text
                   style={[
-                    styles.pickerItem,
-                    currentSquad.playstyle_id === item.id && styles.pickerItemActive,
-                  ]}
-                  onPress={() => handleSelectPlaystyle(item.id)}>
-                  <Text
-                    style={[
-                      styles.pickerItemText,
-                      currentSquad.playstyle_id === item.id && styles.pickerItemTextActive,
-                    ]}>
-                    {item.nama}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
+                    styles.playstylePickerName,
+                    !currentSquad.playstyle_id && styles.playstylePickerNameActive,
+                  ]}>
+                  Tanpa Playstyle
+                </Text>
+                <Text style={styles.playstylePickerDesc}>Tidak menggunakan fokus taktis khusus</Text>
+              </TouchableOpacity>
+
+              {playstyles.map((ps) => {
+                const isCurrent = currentSquad.playstyle_id === ps.id;
+
+                return (
+                  <TouchableOpacity
+                    key={ps.id}
+                    style={[styles.playstylePickerCard, isCurrent && styles.playstylePickerCardActive]}
+                    onPress={() => handleSelectPlaystyle(ps.id)}>
+                    <View style={styles.formationPickerCardTop}>
+                      <Text style={[styles.playstylePickerName, isCurrent && styles.playstylePickerNameActive]}>
+                        {ps.nama}
+                      </Text>
+                      {isCurrent && (
+                        <View style={styles.activeFormationTag}>
+                          <Text style={styles.activeFormationTagText}>DIPILIH</Text>
+                        </View>
+                      )}
+                    </View>
+                    {ps.catatan ? (
+                      <Text style={styles.playstylePickerDesc}>{ps.catatan}</Text>
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
             <TouchableOpacity
               style={styles.pickerCloseBtn}
               onPress={() => setShowPlaystylePicker(false)}>
-              <Text style={styles.pickerCloseText}>BATAL</Text>
+              <Text style={styles.pickerCloseText}>TUTUP</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -1442,51 +1487,127 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 3,
     borderColor: '#000',
-    width: '85%',
-    maxWidth: 380,
-    maxHeight: '70%',
+    width: '90%',
+    maxWidth: 420,
+    maxHeight: '80%',
     padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 8,
   },
   pickerModalTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
     color: '#0A1128',
     letterSpacing: 1,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  pickerEmpty: {
-    fontSize: 13,
-    color: '#888',
-    paddingVertical: 12,
+  pickerCatFilterRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 10,
   },
-  pickerItem: {
+  pickerCatChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#F0F0F0',
     borderWidth: 1.5,
     borderColor: '#000',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#FAFAFA',
-    marginBottom: 6,
   },
-  pickerItemActive: {
+  pickerCatChipActive: {
     backgroundColor: '#0A1128',
   },
-  pickerItemText: {
-    fontSize: 13,
+  pickerCatChipText: {
+    fontSize: 10,
     fontWeight: '800',
     color: '#0A1128',
   },
-  pickerItemTextActive: {
+  pickerCatChipTextActive: {
     color: '#D4AF37',
+  },
+  formationPickerCard: {
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1.5,
+    borderColor: '#000',
+    padding: 10,
+    marginBottom: 8,
+  },
+  formationPickerCardActive: {
+    backgroundColor: '#F0F4FF',
+    borderColor: '#0A1128',
+    borderWidth: 2.5,
+  },
+  formationPickerCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  formationPickerName: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0A1128',
+  },
+  formationPickerNameActive: {
+    color: '#0A1128',
+  },
+  formationPickerSlots: {
+    fontSize: 10,
+    color: '#666',
+  },
+  activeFormationTag: {
+    backgroundColor: '#D4AF37',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  activeFormationTagText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#000',
+  },
+  playstylePickerCard: {
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1.5,
+    borderColor: '#000',
+    padding: 10,
+    marginBottom: 8,
+  },
+  playstylePickerCardActive: {
+    backgroundColor: '#F0F4FF',
+    borderColor: '#0A1128',
+    borderWidth: 2.5,
+  },
+  playstylePickerName: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0A1128',
+  },
+  playstylePickerNameActive: {
+    color: '#0A1128',
+  },
+  playstylePickerDesc: {
+    fontSize: 11,
+    color: '#555',
+    lineHeight: 15,
+    marginTop: 2,
   },
   pickerCloseBtn: {
     alignSelf: 'center',
     marginTop: 10,
-    padding: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 24,
+    backgroundColor: '#0A1128',
+    borderWidth: 2,
+    borderColor: '#000',
   },
   pickerCloseText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#666',
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
 
   // Auto-Generate Banner & Modal

@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useProfile } from '@/src/contexts/ProfileContext';
 import {
   listPlayers,
@@ -45,6 +46,7 @@ type SortOption = 'ovr_desc' | 'ovr_asc' | 'nama_asc' | 'posisi';
 
 export default function PlayersScreen() {
   const { activeProfile } = useProfile();
+  const params = useLocalSearchParams<{ status?: string }>();
 
   const [players, setPlayers] = useState<PlayerWithPositions[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -55,6 +57,13 @@ export default function PlayersScreen() {
   const [filterPos, setFilterPos] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<SortOption>('ovr_desc');
+
+  // Handle incoming status parameter from Home screen
+  useEffect(() => {
+    if (params.status) {
+      setFilterStatus(params.status);
+    }
+  }, [params.status]);
 
   // Bulk Mode
   const [isBulkMode, setIsBulkMode] = useState(false);

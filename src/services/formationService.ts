@@ -1,9 +1,5 @@
-/**
- * FC26 Career Mode Manager - Formation Service
- * CRUD formations & formation slots scoped to profile.
- */
-
 import { getDatabase, generateId } from '@/src/database';
+import { ensureStandardPositions, listPositions } from './positionService';
 import type { Formation, FormationSlot, FormationSlotWithPosition } from '@/src/types';
 
 export interface FormationWithSlots extends Formation {
@@ -19,10 +15,70 @@ export interface SlotInput {
 }
 
 /**
- * List all formations for a profile with slot counts.
+ * Ensure all 24 standard FC 26 formations exist for a profile.
+ */
+export async function ensureDefaultFormations(profileId: string): Promise<void> {
+  const db = await getDatabase();
+  await ensureStandardPositions(profileId);
+
+  const existing = await db.getAllAsync<Formation>(
+    'SELECT nama_formasi FROM formations WHERE profile_id = ?',
+    profileId
+  );
+  const existingNames = new Set(existing.map((f) => f.nama_formasi.trim().toLowerCase()));
+
+  // Fetch current positions for profile
+  const positions = await listPositions(profileId);
+  const posMap = new Map<string, string>();
+  for (const p of positions) {
+    posMap.set(p.nama.toUpperCase(), p.id);
+  }
+
+  const findPos = (name: string) => {
+    const u = name.toUpperCase();
+    if (posMap.has(u)) return posMap.get(u)!;
+    if (u === 'LWB') return posMap.get('LB') ?? positions[0]?.id ?? '';
+    if (u === 'RWB') return posMap.get('RB') ?? positions[0]?.id ?? '';
+    if (u === 'CAM') return posMap.get('CM') ?? positions[0]?.id ?? '';
+    if (u === 'CF' || u === 'LF' || u === 'RF') return posMap.get('ST') ?? positions[0]?.id ?? '';
+    if (u === 'LM') return posMap.get('LW') ?? positions[0]?.id ?? '';
+    if (u === 'RM') return posMap.get('RW') ?? positions[0]?.id ?? '';
+    return positions[0]?.id ?? '';
+  };
+
+  for (const tmpl of FC26_PRESET_TEMPLATES) {
+    if (!existingNames.has(tmpl.name.trim().toLowerCase())) {
+      const fId = generateId();
+      await db.runAsync(
+        'INSERT INTO formations (id, profile_id, nama_formasi) VALUES (?, ?, ?)',
+        fId,
+        profileId,
+        tmpl.name
+      );
+
+      for (const slot of tmpl.slots) {
+        const slotId = generateId();
+        await db.runAsync(
+          `INSERT INTO formation_slots (id, formation_id, position_id, slot_label, coord_x, coord_y)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          slotId,
+          fId,
+          findPos(slot.pos),
+          slot.label,
+          slot.x,
+          slot.y
+        );
+      }
+    }
+  }
+}
+
+/**
+ * List all formations for a profile with slot counts (auto-populates default FC 26 formations).
  */
 export async function listFormations(profileId: string): Promise<FormationWithSlots[]> {
   const db = await getDatabase();
+  await ensureDefaultFormations(profileId);
 
   const formations = await db.getAllAsync<Formation>(
     'SELECT * FROM formations WHERE profile_id = ? ORDER BY nama_formasi ASC',

@@ -108,24 +108,39 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Quick Stats Grid */}
+          {/* Quick Stats Grid (Clickable) */}
           <View style={styles.statsGrid}>
-            <View style={styles.statBox}>
+            <TouchableOpacity
+              style={styles.statBox}
+              onPress={() => router.push({ pathname: '/(tabs)/players', params: { status: 'ALL' } })}
+              activeOpacity={0.7}>
               <Text style={styles.statNum}>{d?.totalPlayers ?? 0}</Text>
-              <Text style={styles.statLabel}>TOTAL</Text>
-            </View>
-            <View style={[styles.statBox, { borderColor: '#137333' }]}>
+              <Text style={styles.statLabel}>TOTAL PEMAIN ➔</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.statBox, { borderColor: '#137333' }]}
+              onPress={() => router.push({ pathname: '/(tabs)/players', params: { status: 'aktif' } })}
+              activeOpacity={0.7}>
               <Text style={[styles.statNum, { color: '#137333' }]}>{d?.activeCount ?? 0}</Text>
-              <Text style={styles.statLabel}>AKTIF</Text>
-            </View>
-            <View style={[styles.statBox, { borderColor: '#B06000' }]}>
+              <Text style={styles.statLabel}>AKTIF ➔</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.statBox, { borderColor: '#B06000' }]}
+              onPress={() => router.push({ pathname: '/(tabs)/players', params: { status: 'loan_out' } })}
+              activeOpacity={0.7}>
               <Text style={[styles.statNum, { color: '#B06000' }]}>{d?.loanCount ?? 0}</Text>
-              <Text style={styles.statLabel}>PINJAMAN</Text>
-            </View>
-            <View style={[styles.statBox, { borderColor: '#C5221F' }]}>
+              <Text style={styles.statLabel}>PINJAMAN ➔</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.statBox, { borderColor: '#C5221F' }]}
+              onPress={() => router.push({ pathname: '/(tabs)/players', params: { status: 'injured' } })}
+              activeOpacity={0.7}>
               <Text style={[styles.statNum, { color: '#C5221F' }]}>{d?.injuredCount ?? 0}</Text>
-              <Text style={styles.statLabel}>CEDERA</Text>
-            </View>
+              <Text style={styles.statLabel}>CEDERA ➔</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
