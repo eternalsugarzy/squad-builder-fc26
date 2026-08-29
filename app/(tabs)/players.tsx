@@ -109,9 +109,11 @@ export default function PlayersScreen() {
     loadData();
   }, [loadData]);
 
-  // Filtered & Sorted Players
+  const squadPlayers = useMemo(() => players.filter((p) => p.status !== 'sudah_dijual'), [players]);
+
+  // Filtered & Sorted Players (Excludes sudah_dijual, which lives in Menu Lainnya -> Pemain Terjual)
   const filteredPlayers = useMemo(() => {
-    return players
+    return squadPlayers
       .filter((p) => {
         // Search query
         if (searchQuery.trim()) {
@@ -140,7 +142,7 @@ export default function PlayersScreen() {
         }
         return 0;
       });
-  }, [players, searchQuery, filterPos, filterStatus, sortBy]);
+  }, [squadPlayers, searchQuery, filterPos, filterStatus, sortBy]);
 
   // Categorized Positions for the Position Filter Modal
   const gkPositions = useMemo(() => positions.filter((p) => p.nama.toUpperCase() === 'GK'), [positions]);
@@ -691,7 +693,7 @@ export default function PlayersScreen() {
                   setShowPosFilterModal(false);
                 }}>
                 <Text style={[styles.posGroupAllText, filterPos === 'ALL' && styles.posGroupAllTextActive]}>
-                  🔘 SEMUA POSISI ({players.length} Pemain)
+                  🔘 SEMUA POSISI ({squadPlayers.length} Pemain)
                 </Text>
               </TouchableOpacity>
 
@@ -701,7 +703,7 @@ export default function PlayersScreen() {
                   <Text style={styles.posCategoryHeader}>🧤 PENJAGA GAWANG</Text>
                   <View style={styles.posCategoryGrid}>
                     {gkPositions.map((pos) => {
-                      const count = players.filter((p) => p.positions.some((pp) => pp.id === pos.id)).length;
+                      const count = squadPlayers.filter((p) => p.positions.some((pp) => pp.id === pos.id)).length;
                       const isSelected = filterPos === pos.id;
                       return (
                         <TouchableOpacity
@@ -874,14 +876,14 @@ export default function PlayersScreen() {
                   setShowStatusFilterModal(false);
                 }}>
                 <Text style={[styles.statusChoiceName, filterStatus === 'ALL' && styles.statusChoiceNameActive]}>
-                  🔘 Semua Status
+                  🔘 Semua Status Skuad
                 </Text>
                 <Text style={[styles.statusChoiceCount, filterStatus === 'ALL' && styles.statusChoiceCountActive]}>
-                  {players.length} Pemain
+                  {squadPlayers.length} Pemain
                 </Text>
               </TouchableOpacity>
 
-              {(['aktif', 'loan_out', 'injured', 'akan_dijual', 'sudah_dijual'] as PlayerStatus[]).map((st) => {
+              {(['aktif', 'loan_out', 'injured', 'akan_dijual'] as PlayerStatus[]).map((st) => {
                 const count = players.filter((p) => p.status === st).length;
                 const isSelected = filterStatus === st;
                 const cfg = STATUS_CONFIG[st];

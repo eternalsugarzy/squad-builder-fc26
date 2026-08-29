@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -27,10 +27,10 @@ import {
   type WatchlistWithDetails,
 } from '@/src/services/watchlistService';
 import { listPositions } from '@/src/services/positionService';
-import { listPlayers } from '@/src/services/playerService';
+import { listPlayers, updatePlayer, deletePlayer } from '@/src/services/playerService';
 import type { Profile, Position, PlayerWithPositions } from '@/src/types';
 
-type MenuTab = 'profiles' | 'watchlist' | 'backup' | 'about';
+type MenuTab = 'profiles' | 'watchlist' | 'sold_players' | 'backup' | 'about';
 
 export default function MoreMenuScreen() {
   const {
@@ -64,7 +64,7 @@ export default function MoreMenuScreen() {
   const [importJsonText, setImportJsonText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
 
-  // Watchlist State
+  // Watchlist & Players State
   const [watchlist, setWatchlist] = useState<WatchlistWithDetails[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [players, setPlayers] = useState<PlayerWithPositions[]>([]);
@@ -79,7 +79,7 @@ export default function MoreMenuScreen() {
   const [wCatatan, setWCatatan] = useState('');
   const [wTerkaitPlayerId, setWTerkaitPlayerId] = useState<string | null>(null);
 
-  const loadWatchlistData = useCallback(async () => {
+  const loadData = useCallback(async () => {
     if (!activeProfile) return;
     setWLoading(true);
     try {
@@ -92,15 +92,20 @@ export default function MoreMenuScreen() {
       setPositions(posList);
       setPlayers(pList);
     } catch (e) {
-      console.error('[MoreMenuScreen] loadWatchlistData error:', e);
+      console.error('[MoreMenuScreen] loadData error:', e);
     } finally {
       setWLoading(false);
     }
   }, [activeProfile]);
 
   useEffect(() => {
-    loadWatchlistData();
-  }, [loadWatchlistData]);
+    loadData();
+  }, [loadData]);
+
+  // Derived sold players
+  const soldPlayers = useMemo(() => {
+    return players.filter((p) => p.status === 'sudah_dijual');
+  }, [players]);
 
   if (profileLoading) {
     return (
@@ -272,7 +277,7 @@ export default function MoreMenuScreen() {
         });
       }
       setShowWatchModal(false);
-      loadWatchlistData();
+      loadData();
     } catch (e) {
       Alert.alert('Error', 'Gagal menyimpan target transfer');
     }
@@ -290,9 +295,62 @@ export default function MoreMenuScreen() {
           onPress: async () => {
             try {
               await deleteWatchlist(item.id);
-              loadWatchlistData();
+              loadData();
             } catch (e) {
               Alert.alert('Error', 'Gagal menghapus target');
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  // ─── Sold Players Handlers ────────────────────────
+  async function handleRevertSoldPlayer(player: PlayerWithPositions) {
+    Alert.alert(
+      'Kembalikan ke Skuad',
+      `Kembalikan status "${player.nama}" menjadi AKTIF di skuad?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Kembalikan',
+          onPress: async () => {
+            try {
+              await updatePlayer(player.id, {
+                nama: player.nama,
+                ovr_current: player.ovr_current,
+                status: 'aktif',
+                status_durasi: null,
+                status_mulai: null,
+                status_catatan: null,
+                position_ids: player.positions.map((p) => p.id),
+              });
+              loadData();
+              Alert.alert('Sukses', `Pemain "${player.nama}" kini kembali aktif di skuad.`);
+            } catch (e) {
+              Alert.alert('Error', 'Gagal mengembalikan status pemain');
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  function handleDeleteSoldPlayerPermanently(player: PlayerWithPositions) {
+    Alert.alert(
+      'Hapus Permanen',
+      `Hapus "${player.nama}" secara permanen dari database?\nData riwayat OVR pemain ini akan hilang.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus Permanen',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deletePlayer(player.id);
+              loadData();
+            } catch (e) {
+              Alert.alert('Error', 'Gagal menghapus pemain');
             }
           },
         },
@@ -311,7 +369,7 @@ export default function MoreMenuScreen() {
           <View style={styles.menuHubHeader}>
             <Text style={styles.menuHubTitle}>MENU & LAINNYA</Text>
             <Text style={styles.menuHubSubtitle}>
-              Pusat konfigurasi, target transfer, backup data, dan informasi pengembang.
+              Pusat konfigurasi, target transfer, arsip pemain terjual, backup data, dan informasi pengembang.
             </Text>
             {activeProfile && (
               <View style={styles.activeSaveBadgeRow}>
@@ -371,7 +429,33 @@ export default function MoreMenuScreen() {
               <Text style={styles.menuArrow}>➔</Text>
             </TouchableOpacity>
 
-            {/* 3. Backup & Ekspor */}
+            {/* 3. Pemain Terjual (Arsip Penjualan) */}
+            <TouchableOpacity
+              style={styles.verticalMenuCard}
+              onPress={() => setActiveMenu('sold_players')}
+              activeOpacity={0.8}>
+              <View style={styles.menuCardLeft}>
+                <View style={[styles.menuIconBox, { backgroundColor: '#5F6368' }]}>
+                  <Text style={styles.menuIconText}>🏷️</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.menuCardTitleRow}>
+                    <Text style={styles.menuCardTitle}>PEMAIN TERJUAL</Text>
+                    <View style={[styles.menuCountBadge, { backgroundColor: '#5F6368' }]}>
+                      <Text style={[styles.menuCountText, { color: '#FFF' }]}>
+                        {soldPlayers.length} Terjual
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.menuCardDesc}>
+                    Arsip pemain yang telah dilepas dari klub. Otomatis tidak dihitung dalam kuota skuad.
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.menuArrow}>➔</Text>
+            </TouchableOpacity>
+
+            {/* 4. Backup & Ekspor */}
             <TouchableOpacity
               style={styles.verticalMenuCard}
               onPress={() => setActiveMenu('backup')}
@@ -395,7 +479,7 @@ export default function MoreMenuScreen() {
               <Text style={styles.menuArrow}>➔</Text>
             </TouchableOpacity>
 
-            {/* 4. Tentang & Dev */}
+            {/* 5. Tentang & Dev */}
             <TouchableOpacity
               style={styles.verticalMenuCard}
               onPress={() => setActiveMenu('about')}
@@ -434,6 +518,7 @@ export default function MoreMenuScreen() {
             <Text style={styles.subScreenTitle}>
               {activeMenu === 'profiles' && '📁 PROFIL & SAVE'}
               {activeMenu === 'watchlist' && '🎯 TRANSFER WATCHLIST'}
+              {activeMenu === 'sold_players' && '🏷️ PEMAIN TERJUAL'}
               {activeMenu === 'backup' && '💾 BACKUP & RESTORE'}
               {activeMenu === 'about' && 'ℹ️ TENTANG & DEVELOPER'}
             </Text>
@@ -569,7 +654,62 @@ export default function MoreMenuScreen() {
             </ScrollView>
           )}
 
-          {/* ─── 3. BACKUP & RESTORE SECTION ───────────── */}
+          {/* ─── 3. PEMAIN TERJUAL SECTION ─────────────── */}
+          {activeMenu === 'sold_players' && (
+            <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.soldBanner}>
+                <Text style={styles.soldBannerTitle}>🏷️ ARSIP PENJUALAN PEMAIN ({soldPlayers.length})</Text>
+                <Text style={styles.soldBannerDesc}>
+                  Pemain di bawah ini telah dilepas dari klub. Mereka otomatis tidak dihitung dalam kuota skuad di dashboard dan tidak akan masuk ke Team Sheet saat auto-generate.
+                </Text>
+              </View>
+
+              {soldPlayers.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyTitle}>Belum Ada Pemain Terjual</Text>
+                  <Text style={styles.emptySub}>
+                    Untuk mengarsipkan penjualan pemain, ubah status pemain menjadi "Sudah Dijual" di tab Pemain.
+                  </Text>
+                </View>
+              ) : (
+                soldPlayers.map((player) => {
+                  const primaryPos = player.positions[0]?.nama ?? '-';
+                  return (
+                    <View key={player.id} style={styles.soldCard}>
+                      <View style={styles.soldCardMain}>
+                        <View style={styles.soldOvrBadge}>
+                          <Text style={styles.soldOvrNum}>{player.ovr_current}</Text>
+                          <Text style={styles.soldPosText}>{primaryPos}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.soldPlayerName}>{player.nama}</Text>
+                          <Text style={styles.soldStatusTag}>SUDAH DIJUAL / DILEPAS</Text>
+                          {player.status_catatan && (
+                            <Text style={styles.soldNote}>Catatan: {player.status_catatan}</Text>
+                          )}
+                        </View>
+                      </View>
+
+                      <View style={styles.soldActions}>
+                        <TouchableOpacity
+                          style={styles.revertBtn}
+                          onPress={() => handleRevertSoldPlayer(player)}>
+                          <Text style={styles.revertBtnText}>🔄 Kembalikan ke Skuad</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.soldDeleteBtn}
+                          onPress={() => handleDeleteSoldPlayerPermanently(player)}>
+                          <Text style={styles.soldDeleteBtnText}>🗑️ Hapus Permanen</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          )}
+
+          {/* ─── 4. BACKUP & RESTORE SECTION ───────────── */}
           {activeMenu === 'backup' && (
             <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
               <View style={styles.backupCard}>
@@ -617,7 +757,7 @@ export default function MoreMenuScreen() {
               <View style={[styles.backupCard, { borderColor: '#B06000' }]}>
                 <Text style={styles.backupCardTitle}>🔄 MUAT ULANG DATA SEED SAVE 1</Text>
                 <Text style={styles.backupCardDesc}>
-                  Jika data profil default Anda kosong, tekan tombol ini untuk mengisi ulang 31 pemain, 24 formasi, dan skuad Career Mode.
+                  Jika data profil default Anda kosong, tekan tombol ini untuk mengisi ulang 44 pemain, 24 formasi, dan skuad Career Mode.
                 </Text>
                 <TouchableOpacity
                   style={[styles.backupBtn, { backgroundColor: '#B06000' }]}
@@ -644,7 +784,7 @@ export default function MoreMenuScreen() {
             </ScrollView>
           )}
 
-          {/* ─── 4. TENTANG & DEV SECTION ──────────────── */}
+          {/* ─── 5. TENTANG & DEV SECTION ──────────────── */}
           {activeMenu === 'about' && (
             <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
               {/* Developer Card */}
@@ -663,7 +803,7 @@ export default function MoreMenuScreen() {
               {/* App Info Card */}
               <View style={styles.aboutCard}>
                 <Text style={styles.aboutTitle}>FC 26 CAREER MODE MANAGER</Text>
-                <Text style={styles.aboutVersion}>Versi 1.0.0 (Build Final iOS)</Text>
+                <Text style={styles.aboutVersion}>Versi 1.0.0 (Build Final iOS & Android)</Text>
                 <View style={styles.aboutDivider} />
 
                 <Text style={styles.aboutFeatureTitle}>FITUR UTAMA APLIKASI:</Text>
@@ -673,6 +813,7 @@ export default function MoreMenuScreen() {
                 <Text style={styles.aboutBullet}>• 📊 Monitor Kebutuhan Kuota Posisi (Dual-Mode)</Text>
                 <Text style={styles.aboutBullet}>• 📁 Multi-Save Career Mode Profile Manager</Text>
                 <Text style={styles.aboutBullet}>• 🎯 Transfer Watchlist & Pengganti Pemain</Text>
+                <Text style={styles.aboutBullet}>• 🏷️ Arsip Penjualan Pemain Terjual</Text>
                 <Text style={styles.aboutBullet}>• 💾 Backup & Restore Full JSON</Text>
               </View>
             </ScrollView>
@@ -1314,6 +1455,112 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   watchDeleteBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#C5221F',
+  },
+
+  // Sold Players Section
+  soldBanner: {
+    backgroundColor: '#F1F3F4',
+    borderWidth: 2,
+    borderColor: '#000',
+    padding: 14,
+    marginBottom: 12,
+  },
+  soldBannerTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0A1128',
+    letterSpacing: 0.5,
+  },
+  soldBannerDesc: {
+    fontSize: 11,
+    color: '#555',
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  soldCard: {
+    backgroundColor: '#FAFAFA',
+    borderWidth: 2,
+    borderColor: '#888',
+    padding: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 0,
+    elevation: 2,
+  },
+  soldCardMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  soldOvrBadge: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#5F6368',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    borderWidth: 1.5,
+    borderColor: '#000',
+  },
+  soldOvrNum: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#FFF',
+    lineHeight: 18,
+  },
+  soldPosText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#DDD',
+    letterSpacing: 0.5,
+  },
+  soldPlayerName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#333',
+  },
+  soldStatusTag: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#762700',
+    marginTop: 2,
+  },
+  soldNote: {
+    fontSize: 11,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  soldActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  revertBtn: {
+    flex: 1,
+    backgroundColor: '#0A1128',
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#000',
+  },
+  revertBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#D4AF37',
+  },
+  soldDeleteBtn: {
+    borderWidth: 1.5,
+    borderColor: '#C5221F',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FFF',
+  },
+  soldDeleteBtnText: {
     fontSize: 11,
     fontWeight: '800',
     color: '#C5221F',

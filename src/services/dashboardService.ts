@@ -142,6 +142,7 @@ export async function getDashboardData(profileId: string): Promise<DashboardData
     listWatchlist(profileId),
   ]);
 
+  const squadPlayers = players.filter((p) => p.status !== 'sudah_dijual');
   const activeCount = players.filter((p) => p.status === 'aktif').length;
   const loanCount = players.filter((p) => p.status === 'loan_out').length;
   const injuredCount = players.filter((p) => p.status === 'injured').length;
@@ -149,7 +150,7 @@ export async function getDashboardData(profileId: string): Promise<DashboardData
 
   return {
     profileName: '',
-    totalPlayers: players.length,
+    totalPlayers: squadPlayers.length,
     activeCount,
     loanCount,
     injuredCount,
