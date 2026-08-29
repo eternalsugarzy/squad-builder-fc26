@@ -14,6 +14,7 @@ import {
   renameProfile,
   deleteProfile,
 } from '@/src/services/profileService';
+import { seedProfile1 } from '@/src/database/seed';
 
 interface ProfileContextType {
   /** The currently active profile, or null if none exists */
@@ -30,6 +31,8 @@ interface ProfileContextType {
   editProfileName: (id: string, namaSave: string) => Promise<void>;
   /** Delete a profile */
   removeProfile: (id: string) => Promise<void>;
+  /** Seed Profile 1 */
+  seedData: () => Promise<void>;
   /** Refresh profiles from database */
   refresh: () => Promise<void>;
 }
@@ -43,10 +46,21 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [allProfiles, active] = await Promise.all([
+      let [allProfiles, active] = await Promise.all([
         listProfiles(),
         getActiveProfile(),
       ]);
+
+      // Auto-seed if database is empty on first launch
+      if (allProfiles.length === 0) {
+        console.log('[ProfileContext] Empty DB detected, auto-seeding Profile 1 (Save 1)...');
+        await seedProfile1();
+        [allProfiles, active] = await Promise.all([
+          listProfiles(),
+          getActiveProfile(),
+        ]);
+      }
+
       setProfiles(allProfiles);
       setActiveProfile(active);
     } catch (error) {
@@ -55,6 +69,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, []);
+
+  const seedData = useCallback(async () => {
+    setLoading(true);
+    try {
+      await seedProfile1();
+      await refresh();
+    } finally {
+      setLoading(false);
+    }
+  }, [refresh]);
 
   useEffect(() => {
     refresh();
@@ -91,6 +115,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         addProfile,
         editProfileName,
         removeProfile,
+        seedData,
         refresh,
       }}>
       {children}

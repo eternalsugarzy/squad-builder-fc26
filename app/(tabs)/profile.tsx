@@ -31,6 +31,7 @@ export default function ProfileScreen() {
     addProfile,
     editProfileName,
     removeProfile,
+    seedData,
     refresh,
   } = useProfile();
 
@@ -258,6 +259,29 @@ export default function ProfileScreen() {
 
             <TouchableOpacity style={styles.toolBtn} onPress={handleExportJson}>
               <Text style={styles.toolBtnText}>💾 Backup Profil Ini (JSON)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.toolBtn, { backgroundColor: '#F0F4FF' }]}
+              onPress={async () => {
+                Alert.alert(
+                  'Muat Data Awal',
+                  'Muat ulang data profil "Save 1" (44 pemain, formasi 4-3-3, 4 tim, watchlist)?',
+                  [
+                    { text: 'Batal', style: 'cancel' },
+                    {
+                      text: 'Muat',
+                      onPress: async () => {
+                        await seedData();
+                        Alert.alert('Sukses', 'Data Save 1 berhasil dimuat!');
+                      },
+                    },
+                  ]
+                );
+              }}>
+              <Text style={[styles.toolBtnText, { color: '#0A1128' }]}>
+                ⚡ Muat Ulang Data Awal (Save 1)
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
