@@ -55,13 +55,15 @@ export async function updateBufferMultiplier(
 
 /**
  * Compute position quotas (supports both actual squad mode and simulated formation mode):
- * - If formationId is passed: simulates requirement if all 4 core squads used that formation (or single squad)
- * - If formationId is null: aggregates actual formation slots across all squads in the profile.
+ * - Tim 1-3 are independent core squads.
+ * - Tim 4 is a hybrid/combination squad using players from Tim 1-3 (not requiring additional separate players).
+ * - If formationId is passed: simulates requirement for the 3 core squads (Tim 1-3).
+ * - If formationId is null: aggregates actual formation slots across Tim 1-3.
  */
 export async function calculatePositionQuotas(
   profileId: string,
   simulatedFormationId?: string | null,
-  simulatedSquadCount: number = 4
+  simulatedSquadCount: number = 3
 ): Promise<PositionQuota[]> {
   const db = await getDatabase();
   const positions = await listPositions(profileId);
@@ -75,7 +77,7 @@ export async function calculatePositionQuotas(
   const slotCountMap = new Map<string, number>();
 
   if (simulatedFormationId) {
-    // Count slots for this single formation and multiply by simulatedSquadCount
+    // Count slots for this single formation and multiply by simulatedSquadCount (default 3 core squads)
     const formationSlots = await db.getAllAsync<{ position_id: string; slot_count: number }>(
       `SELECT position_id, COUNT(id) as slot_count
        FROM formation_slots
@@ -88,12 +90,12 @@ export async function calculatePositionQuotas(
       slotCountMap.set(r.position_id, r.slot_count * simulatedSquadCount);
     }
   } else {
-    // Count actual formation slots across all active squads in profile
+    // Count actual formation slots across independent core squads (tier_order <= 3)
     const slotCountRows = await db.getAllAsync<{ position_id: string; slot_count: number }>(
       `SELECT fs.position_id, COUNT(fs.id) as slot_count
        FROM squads s
        JOIN formation_slots fs ON s.formation_id = fs.formation_id
-       WHERE s.profile_id = ?
+       WHERE s.profile_id = ? AND s.tier_order <= 3
        GROUP BY fs.position_id`,
       profileId
     );

@@ -65,7 +65,7 @@ export default function HomeScreen() {
     async function updateQuotas() {
       if (!activeProfile) return;
       if (selectedSimFormationId) {
-        const sim = await calculatePositionQuotas(activeProfile.id, selectedSimFormationId, 4);
+        const sim = await calculatePositionQuotas(activeProfile.id, selectedSimFormationId, 3);
         setSimulatedQuotas(sim);
       }
     }
@@ -210,8 +210,8 @@ export default function HomeScreen() {
               <Text style={styles.quotaTitle}>MONITOR KEBUTUHAN POSISI</Text>
               <Text style={styles.quotaSubtitle}>
                 {selectedSimFormationId
-                  ? `Simulasi kebutuhan jika memainkan 4 tim dengan formasi ${selectedFormationObj?.nama_formasi}`
-                  : `Dihitung real-time dari total formasi ${d?.squads.length ?? 4} squad aktif`}
+                  ? `Simulasi kebutuhan 3 tim inti mandiri dengan formasi ${selectedFormationObj?.nama_formasi}`
+                  : 'Dihitung dari 3 Tim Inti Mandiri (Tim 1–3). Tim 4 adalah tim hybrid gabungan.'}
               </Text>
             </View>
           </View>
@@ -225,8 +225,8 @@ export default function HomeScreen() {
               <Text style={styles.modeDropdownLabel}>SUMBER TINJAUAN KUOTA:</Text>
               <Text style={styles.modeDropdownValue} numberOfLines={1}>
                 {selectedSimFormationId
-                  ? `🔍 Simulasi: ${selectedFormationObj?.nama_formasi ?? 'Formasi'} (4 Tim)`
-                  : `⚡ Sesuai Formasi Tim Aktif (${d?.squads.length ?? 4} Squad)`}
+                  ? `🔍 Simulasi: ${selectedFormationObj?.nama_formasi ?? 'Formasi'} (3 Tim Inti)`
+                  : '⚡ Sesuai Formasi 3 Tim Inti (Tim 1–3)'}
               </Text>
             </View>
             <View style={styles.modeDropdownArrowBox}>
@@ -365,15 +365,15 @@ export default function HomeScreen() {
                     styles.simChoiceTitle,
                     selectedSimFormationId === null && styles.simChoiceTitleActive,
                   ]}>
-                  ⚡ Sesuai Formasi Squad Aktif (Default)
+                  ⚡ Sesuai Formasi Tim Inti (Tim 1–3) (Default)
                 </Text>
                 <Text style={styles.simChoiceSub}>
-                  Menghitung slot dari formasi nyata yang sedang dipakai oleh tim 1–4 Anda saat ini.
+                  Menghitung kebutuhan slot dari formasi nyata Tim 1–3 (Tim 4 adalah tim gabungan hybrid).
                 </Text>
               </View>
             </TouchableOpacity>
 
-            <Text style={styles.simSectionHeader}>ATAU SIMULASI FORMASI TERTENTU (4 TIM):</Text>
+            <Text style={styles.simSectionHeader}>ATAU SIMULASI FORMASI TERTENTU (3 TIM INTI):</Text>
 
             {/* Category Filter */}
             <View style={styles.simCatFilterRow}>
