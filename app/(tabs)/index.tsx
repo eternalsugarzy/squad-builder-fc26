@@ -1,34 +1,32 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { getDatabase } from '@/src/database';
+import { useProfile } from '@/src/contexts/ProfileContext';
 
 export default function HomeScreen() {
-  const [dbReady, setDbReady] = useState(false);
-
-  useEffect(() => {
-    initDb();
-  }, []);
-
-  async function initDb() {
-    try {
-      await getDatabase();
-      setDbReady(true);
-      console.log('[Home] Database initialized successfully');
-    } catch (error) {
-      console.error('[Home] Database init error:', error);
-    }
-  }
+  const { activeProfile, loading } = useProfile();
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>FC 26 CAREER MODE</Text>
       <Text style={styles.subtitle}>MANAGER</Text>
+
       <View style={styles.badge}>
         <Text style={styles.badgeText}>
-          {dbReady ? '● DB READY' : '○ LOADING DB...'}
+          {loading
+            ? '○ LOADING...'
+            : activeProfile
+              ? `● ${activeProfile.nama_save.toUpperCase()}`
+              : '○ BELUM ADA PROFIL'}
         </Text>
       </View>
-      <Text style={styles.hint}>Dashboard akan ditampilkan di Tahap 8</Text>
+
+      {!loading && !activeProfile && (
+        <Text style={styles.hint}>
+          Buka tab Profil untuk membuat profil baru
+        </Text>
+      )}
+
+      <Text style={styles.dashboardHint}>Dashboard akan ditampilkan di Tahap 8</Text>
     </View>
   );
 }
@@ -68,8 +66,14 @@ const styles = StyleSheet.create({
     color: '#0A1128',
   },
   hint: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  dashboardHint: {
     fontSize: 13,
     color: '#999',
-    marginTop: 8,
+    marginTop: 24,
   },
 });
