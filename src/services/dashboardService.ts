@@ -69,9 +69,9 @@ export async function calculatePositionQuotas(
   const positions = await listPositions(profileId);
   const allPlayers = await listPlayers(profileId);
 
-  // Active players pool (status = aktif or akan_dijual)
+  // Active players pool (status = aktif, loan_in, or akan_dijual)
   const activePlayers = allPlayers.filter(
-    (p) => p.status === 'aktif' || p.status === 'akan_dijual'
+    (p) => p.status === 'aktif' || p.status === 'akan_dijual' || p.status === 'loan_in'
   );
 
   const slotCountMap = new Map<string, number>();

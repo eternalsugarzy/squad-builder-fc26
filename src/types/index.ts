@@ -4,7 +4,7 @@
  */
 
 // ─── Status Types ───────────────────────────────────────────────
-export type PlayerStatus = 'aktif' | 'loan_out' | 'injured' | 'akan_dijual' | 'sudah_dijual';
+export type PlayerStatus = 'aktif' | 'loan_out' | 'loan_in' | 'injured' | 'akan_dijual' | 'sudah_dijual';
 export type StatusDurasi = '6_bulan' | '1_tahun' | '2_tahun';
 
 // ─── Database Row Types ─────────────────────────────────────────

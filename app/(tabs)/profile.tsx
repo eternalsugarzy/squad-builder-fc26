@@ -91,7 +91,7 @@ export default function MoreMenuScreen() {
   const [playerPickerSearch, setPlayerPickerSearch] = useState('');
 
   // ─── Transfer & Loan List State ───────────────────
-  const [tlSubTab, setTlSubTab] = useState<'jual' | 'loan'>('jual');
+  const [tlSubTab, setTlSubTab] = useState<'jual' | 'loan_out' | 'loan_in'>('jual');
   const [tlSearchQuery, setTlSearchQuery] = useState('');
   const [tlFilterPos, setTlFilterPos] = useState('ALL');
   const [showTlFilterPosModal, setShowTlFilterPosModal] = useState(false);
@@ -100,7 +100,7 @@ export default function MoreMenuScreen() {
   const [showAddTlModal, setShowAddTlModal] = useState(false);
   const [tlEditPlayerTarget, setTlEditPlayerTarget] = useState<PlayerWithPositions | null>(null);
   const [tlSelectedPlayerId, setTlSelectedPlayerId] = useState<string | null>(null);
-  const [tlType, setTlType] = useState<'akan_dijual' | 'loan_out'>('akan_dijual');
+  const [tlType, setTlType] = useState<'akan_dijual' | 'loan_out' | 'loan_in'>('akan_dijual');
   const [tlDurasi, setTlDurasi] = useState<StatusDurasi>('1_tahun');
   const [tlIsOpsiBeli, setTlIsOpsiBeli] = useState(false);
   const [tlCatatan, setTlCatatan] = useState('');
@@ -133,7 +133,8 @@ export default function MoreMenuScreen() {
   // Derived collections
   const soldPlayers = useMemo(() => players.filter((p) => p.status === 'sudah_dijual'), [players]);
   const akanDijualPlayers = useMemo(() => players.filter((p) => p.status === 'akan_dijual'), [players]);
-  const loanPlayers = useMemo(() => players.filter((p) => p.status === 'loan_out'), [players]);
+  const loanOutPlayers = useMemo(() => players.filter((p) => p.status === 'loan_out'), [players]);
+  const loanInPlayers = useMemo(() => players.filter((p) => p.status === 'loan_in'), [players]);
 
   // Categorized Positions for Modals
   const gkPositions = useMemo(() => positions.filter((p) => p.nama.toUpperCase() === 'GK'), [positions]);
@@ -195,8 +196,8 @@ export default function MoreMenuScreen() {
     });
   }, [akanDijualPlayers, tlFilterPos, tlSearchQuery]);
 
-  const filteredLoanPlayers = useMemo(() => {
-    return loanPlayers.filter((p) => {
+  const filteredLoanOutPlayers = useMemo(() => {
+    return loanOutPlayers.filter((p) => {
       if (tlFilterPos !== 'ALL') {
         const hasPos = p.positions.some((pos) => pos.id === tlFilterPos);
         if (!hasPos) return false;
@@ -210,7 +211,24 @@ export default function MoreMenuScreen() {
       }
       return true;
     });
-  }, [loanPlayers, tlFilterPos, tlSearchQuery]);
+  }, [loanOutPlayers, tlFilterPos, tlSearchQuery]);
+
+  const filteredLoanInPlayers = useMemo(() => {
+    return loanInPlayers.filter((p) => {
+      if (tlFilterPos !== 'ALL') {
+        const hasPos = p.positions.some((pos) => pos.id === tlFilterPos);
+        if (!hasPos) return false;
+      }
+      if (tlSearchQuery.trim()) {
+        const q = tlSearchQuery.toLowerCase();
+        const matchName = p.nama.toLowerCase().includes(q);
+        const matchPos = p.positions.some((pos) => pos.nama.toLowerCase().includes(q));
+        const matchNote = p.status_catatan?.toLowerCase().includes(q);
+        if (!matchName && !matchPos && !matchNote) return false;
+      }
+      return true;
+    });
+  }, [loanInPlayers, tlFilterPos, tlSearchQuery]);
 
   // Selected details for Form Display
   const selectedFormPos = positions.find((p) => p.id === wPosId);
@@ -459,7 +477,7 @@ export default function MoreMenuScreen() {
   function openAddTransferLoan() {
     setTlEditPlayerTarget(null);
     setTlSelectedPlayerId(players.find((p) => p.status === 'aktif')?.id ?? null);
-    setTlType(tlSubTab === 'loan' ? 'loan_out' : 'akan_dijual');
+    setTlType(tlSubTab === 'loan_in' ? 'loan_in' : tlSubTab === 'loan_out' ? 'loan_out' : 'akan_dijual');
     setTlDurasi('1_tahun');
     setTlIsOpsiBeli(false);
     setTlCatatan('');
@@ -469,7 +487,7 @@ export default function MoreMenuScreen() {
   function openEditTransferLoan(player: PlayerWithPositions) {
     setTlEditPlayerTarget(player);
     setTlSelectedPlayerId(player.id);
-    setTlType(player.status === 'loan_out' ? 'loan_out' : 'akan_dijual');
+    setTlType(player.status === 'loan_in' ? 'loan_in' : player.status === 'loan_out' ? 'loan_out' : 'akan_dijual');
     setTlDurasi(player.status_durasi ?? '1_tahun');
     const hasOpsiBeli = player.status_catatan?.includes('[OPSI BELI]') ?? false;
     setTlIsOpsiBeli(hasOpsiBeli);
@@ -487,7 +505,7 @@ export default function MoreMenuScreen() {
     if (!targetPlayer) return;
 
     let finalNote = tlCatatan.trim();
-    if (tlType === 'loan_out' && tlIsOpsiBeli) {
+    if ((tlType === 'loan_out' || tlType === 'loan_in') && tlIsOpsiBeli) {
       finalNote = finalNote ? `[OPSI BELI] ${finalNote}` : '[OPSI BELI] Pinjaman dengan opsi beli permanen';
     }
 
@@ -496,7 +514,7 @@ export default function MoreMenuScreen() {
         nama: targetPlayer.nama,
         ovr_current: targetPlayer.ovr_current,
         status: tlType,
-        status_durasi: tlType === 'loan_out' ? tlDurasi : null,
+        status_durasi: tlType === 'loan_out' || tlType === 'loan_in' ? tlDurasi : null,
         status_mulai: new Date().toISOString(),
         status_catatan: finalNote || null,
         position_ids: targetPlayer.positions.map((p) => p.id),
@@ -507,7 +525,11 @@ export default function MoreMenuScreen() {
       Alert.alert(
         'Sukses 🎉',
         `Pemain "${targetPlayer.nama}" berhasil ditetapkan ke ${
-          tlType === 'loan_out' ? 'Daftar Pinjaman' : 'Rencana Jual'
+          tlType === 'loan_in'
+            ? 'Pinjaman Masuk (Loan In)'
+            : tlType === 'loan_out'
+            ? 'Dipinjamkan Keluar (Loan Out)'
+            : 'Rencana Jual'
         }.`
       );
     } catch (e) {
@@ -604,6 +626,68 @@ export default function MoreMenuScreen() {
     );
   }
 
+  function handleBuyLoanInPermanently(player: PlayerWithPositions) {
+    Alert.alert(
+      'Tebus Permanen',
+      `Tebus "${player.nama}" menjadi pemain PERMANEN klub Anda? Status pemain akan berubah menjadi Aktif Tetap.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Tebus Permanen',
+          onPress: async () => {
+            try {
+              await updatePlayer(player.id, {
+                nama: player.nama,
+                ovr_current: player.ovr_current,
+                status: 'aktif',
+                status_durasi: null,
+                status_mulai: null,
+                status_catatan: null,
+                position_ids: player.positions.map((p) => p.id),
+              });
+              loadData();
+              Alert.alert('Sukses 🎉', `Pemain "${player.nama}" kini berstatus PEMAIN TETAP aktif di skuad!`);
+            } catch (e) {
+              Alert.alert('Error', 'Gagal memperbarui status tebus pemain');
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  function handleReturnLoanIn(player: PlayerWithPositions) {
+    Alert.alert(
+      'Pulangkan ke Klub Asal',
+      `Masa peminjaman "${player.nama}" selesai. Pulangkan pemain ke klub asalnya?\nPemain akan dipindahkan dari skuad aktif ke arsip.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Pulangkan Pemain',
+          onPress: async () => {
+            try {
+              await updatePlayer(player.id, {
+                nama: player.nama,
+                ovr_current: player.ovr_current,
+                status: 'sudah_dijual',
+                status_durasi: null,
+                status_mulai: new Date().toISOString(),
+                status_catatan: player.status_catatan
+                  ? `[Selesai Pinjam] ${player.status_catatan}`
+                  : 'Masa pinjaman selesai, dikembalikan ke klub asal',
+                position_ids: player.positions.map((p) => p.id),
+              });
+              loadData();
+              Alert.alert('Sukses', `Pemain "${player.nama}" telah dipulangkan ke klub asalnya.`);
+            } catch (e) {
+              Alert.alert('Error', 'Gagal memulangkan pemain pinjaman');
+            }
+          },
+        },
+      ]
+    );
+  }
+
   // ─── Sold Players Handlers ────────────────────────
   async function handleRevertSoldPlayer(player: PlayerWithPositions) {
     Alert.alert(
@@ -668,7 +752,7 @@ export default function MoreMenuScreen() {
           <View style={styles.menuHubHeader}>
             <Text style={styles.menuHubTitle}>MENU & LAINNYA</Text>
             <Text style={styles.menuHubSubtitle}>
-              Pusat konfigurasi, transfer target & rencana keluar, arsip pemain terjual, backup data, dan informasi pengembang.
+              Pusat konfigurasi, target incaran transfer, daftar lepas & pinjaman (in/out), arsip penjualan, backup data, dan informasi pengembang.
             </Text>
             {activeProfile && (
               <View style={styles.activeSaveBadgeRow}>
@@ -742,12 +826,12 @@ export default function MoreMenuScreen() {
                     <Text style={styles.menuCardTitle}>TRANSFER & LOAN LIST</Text>
                     <View style={[styles.menuCountBadge, { backgroundColor: '#C5221F' }]}>
                       <Text style={[styles.menuCountText, { color: '#FFF' }]}>
-                        {akanDijualPlayers.length + loanPlayers.length} Pemain
+                        {akanDijualPlayers.length + loanOutPlayers.length + loanInPlayers.length} Pemain
                       </Text>
                     </View>
                   </View>
                   <Text style={styles.menuCardDesc}>
-                    Rencana jual pemain skuad & daftar pemain yang dipinjamkan (6 bln, 1 thn, 2 thn, opsi beli).
+                    Rencana jual, dipinjamkan keluar (Loan Out), dan pinjaman masuk dari klub lain (Loan In).
                   </Text>
                 </View>
               </View>
@@ -1102,10 +1186,10 @@ export default function MoreMenuScreen() {
             </View>
           )}
 
-          {/* ─── 3. TRANSFER & LOAN LIST SECTION (NEW) ─── */}
+          {/* ─── 3. TRANSFER & LOAN LIST SECTION (3 SUB-TABS) ─ */}
           {activeMenu === 'transfer_loan' && (
             <View style={{ flex: 1 }}>
-              {/* Segmented Switcher (Rencana Jual vs Daftar Pinjaman) */}
+              {/* 3-Segment Switcher (Rencana Jual vs Loan Out vs Loan In) */}
               <View style={styles.tlSegmentBar}>
                 <TouchableOpacity
                   style={[styles.tlSegmentBtn, tlSubTab === 'jual' && styles.tlSegmentBtnActiveJual]}
@@ -1115,19 +1199,31 @@ export default function MoreMenuScreen() {
                       styles.tlSegmentBtnText,
                       tlSubTab === 'jual' && styles.tlSegmentBtnTextActiveJual,
                     ]}>
-                    🔴 RENCANA JUAL ({akanDijualPlayers.length})
+                    🔴 JUAL ({akanDijualPlayers.length})
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.tlSegmentBtn, tlSubTab === 'loan' && styles.tlSegmentBtnActiveLoan]}
-                  onPress={() => setTlSubTab('loan')}>
+                  style={[styles.tlSegmentBtn, tlSubTab === 'loan_out' && styles.tlSegmentBtnActiveLoanOut]}
+                  onPress={() => setTlSubTab('loan_out')}>
                   <Text
                     style={[
                       styles.tlSegmentBtnText,
-                      tlSubTab === 'loan' && styles.tlSegmentBtnTextActiveLoan,
+                      tlSubTab === 'loan_out' && styles.tlSegmentBtnTextActiveLoanOut,
                     ]}>
-                    🟡 DAFTAR LOAN ({loanPlayers.length})
+                    🟡 LOAN OUT ({loanOutPlayers.length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.tlSegmentBtn, tlSubTab === 'loan_in' && styles.tlSegmentBtnActiveLoanIn]}
+                  onPress={() => setTlSubTab('loan_in')}>
+                  <Text
+                    style={[
+                      styles.tlSegmentBtnText,
+                      tlSubTab === 'loan_in' && styles.tlSegmentBtnTextActiveLoanIn,
+                    ]}>
+                    🟢 LOAN IN ({loanInPlayers.length})
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1233,7 +1329,6 @@ export default function MoreMenuScreen() {
                   ) : (
                     filteredAkanDijual.map((player) => {
                       const primaryPos = player.positions[0]?.nama ?? '-';
-                      const secondaryPos = player.positions.slice(1).map((p) => p.nama).join(', ');
 
                       // Find ALL matching Watchlist targets for this player or player's positions
                       const matchingTargets = watchlist.filter(
@@ -1346,22 +1441,22 @@ export default function MoreMenuScreen() {
                 </ScrollView>
               )}
 
-              {/* ─── SUB-TAB 2: DAFTAR PINJAMAN ──────────── */}
-              {tlSubTab === 'loan' && (
+              {/* ─── SUB-TAB 2: DAFTAR PINJAMAN KELUAR (LOAN OUT) ─ */}
+              {tlSubTab === 'loan_out' && (
                 <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-                  {filteredLoanPlayers.length === 0 ? (
+                  {filteredLoanOutPlayers.length === 0 ? (
                     <View style={styles.emptyCard}>
                       <Text style={styles.emptyTitle}>
-                        {loanPlayers.length === 0 ? 'Belum Ada Pemain yang Dipinjamkan' : 'Pemain Tidak Ditemukan'}
+                        {loanOutPlayers.length === 0 ? 'Belum Ada Pemain yang Dipinjamkan Keluar' : 'Pemain Tidak Ditemukan'}
                       </Text>
                       <Text style={styles.emptySub}>
-                        {loanPlayers.length === 0
+                        {loanOutPlayers.length === 0
                           ? 'Gunakan tombol "+ TAMBAH PEMAIN" di atas untuk meminjamkan pemain muda/cadangan ke klub lain.'
                           : 'Coba ganti filter posisi atau kata kunci pencarian.'}
                       </Text>
                     </View>
                   ) : (
-                    filteredLoanPlayers.map((player) => {
+                    filteredLoanOutPlayers.map((player) => {
                       const primaryPos = player.positions[0]?.nama ?? '-';
                       const durasiLabel =
                         player.status_durasi === '6_bulan'
@@ -1376,14 +1471,14 @@ export default function MoreMenuScreen() {
                         <View key={player.id} style={styles.tlLoanCard}>
                           {/* Top: Player Name & OVR */}
                           <View style={styles.watchCardTop}>
-                            <View style={[styles.watchPosBadge, { backgroundColor: '#0A1128' }]}>
-                              <Text style={styles.watchPosBadgeText}>{primaryPos}</Text>
+                            <View style={[styles.watchPosBadge, { backgroundColor: '#B06000' }]}>
+                              <Text style={[styles.watchPosBadgeText, { color: '#FFF' }]}>{primaryPos}</Text>
                             </View>
                             <View style={{ flex: 1, marginLeft: 12 }}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                 <Text style={styles.watchPlayerNameHeader}>{player.nama}</Text>
                                 <View style={styles.loanBadgeTag}>
-                                  <Text style={styles.loanBadgeTagText}>DIPINJAMKAN</Text>
+                                  <Text style={styles.loanBadgeTagText}>DIPINJAMKAN KELUAR</Text>
                                 </View>
                               </View>
                               <Text style={styles.tlPlayerSub}>
@@ -1433,7 +1528,112 @@ export default function MoreMenuScreen() {
                             <TouchableOpacity
                               style={styles.tlEditBtn}
                               onPress={() => openEditTransferLoan(player)}>
-                              <Text style={styles.tlEditBtnText}>✏️ Edit Pinjaman</Text>
+                              <Text style={styles.tlEditBtnText}>✏️ Edit</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </ScrollView>
+              )}
+
+              {/* ─── SUB-TAB 3: DAFTAR PINJAMAN MASUK (LOAN IN) ─── */}
+              {tlSubTab === 'loan_in' && (
+                <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+                  {filteredLoanInPlayers.length === 0 ? (
+                    <View style={styles.emptyCard}>
+                      <Text style={styles.emptyTitle}>
+                        {loanInPlayers.length === 0 ? 'Belum Ada Pemain Pinjaman Masuk' : 'Pemain Tidak Ditemukan'}
+                      </Text>
+                      <Text style={styles.emptySub}>
+                        {loanInPlayers.length === 0
+                          ? 'Pemain yang Anda pinjam dari klub lain akan tampil di sini dan dapat dimainkan di Team Sheet.'
+                          : 'Coba ganti filter posisi atau kata kunci pencarian.'}
+                      </Text>
+                    </View>
+                  ) : (
+                    filteredLoanInPlayers.map((player) => {
+                      const primaryPos = player.positions[0]?.nama ?? '-';
+                      const durasiLabel =
+                        player.status_durasi === '6_bulan'
+                          ? '6 Bulan'
+                          : player.status_durasi === '2_tahun'
+                          ? '2 Tahun'
+                          : '1 Tahun';
+                      const hasOpsiBeli = player.status_catatan?.includes('[OPSI BELI]') ?? false;
+                      const cleanNote = (player.status_catatan ?? '').replace('[OPSI BELI] ', '').replace('[OPSI BELI]', '');
+
+                      return (
+                        <View key={player.id} style={styles.tlLoanInCard}>
+                          {/* Top: Player Name & OVR */}
+                          <View style={styles.watchCardTop}>
+                            <View style={[styles.watchPosBadge, { backgroundColor: '#137333' }]}>
+                              <Text style={[styles.watchPosBadgeText, { color: '#FFF' }]}>{primaryPos}</Text>
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 12 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={styles.watchPlayerNameHeader}>{player.nama}</Text>
+                                <View style={styles.loanInBadgeTag}>
+                                  <Text style={styles.loanInBadgeTagText}>PINJAMAN MASUK (LOAN IN)</Text>
+                                </View>
+                              </View>
+                              <Text style={styles.tlPlayerSub}>
+                                OVR: {player.ovr_current} • Posisi: {player.positions.map((p) => p.nama).join(', ')} • Bisa Masuk Team Sheet
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Loan Badges: Durasi & Opsi Beli */}
+                          <View style={styles.tlLoanBadgesRow}>
+                            <View style={[styles.tlLoanDurationBadge, { backgroundColor: '#137333' }]}>
+                              <Text style={[styles.tlLoanDurationBadgeText, { color: '#FFF' }]}>
+                                ⏱️ Durasi: {durasiLabel}
+                              </Text>
+                            </View>
+
+                            <View
+                              style={[
+                                styles.tlLoanOptionBadge,
+                                hasOpsiBeli && styles.tlLoanOptionBadgeBuy,
+                              ]}>
+                              <Text
+                                style={[
+                                  styles.tlLoanOptionBadgeText,
+                                  hasOpsiBeli && styles.tlLoanOptionBadgeTextBuy,
+                                ]}>
+                                {hasOpsiBeli ? '🏷️ Dengan Opsi Beli Permanen' : '🛡️ Pinjaman Murni'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Notes / Klub Asal */}
+                          {cleanNote ? (
+                            <View style={styles.watchNoteBox}>
+                              <Text style={styles.watchNoteLabel}>📝 Catatan Pinjaman / Klub Asal:</Text>
+                              <Text style={styles.watchNoteText}>"{cleanNote}"</Text>
+                            </View>
+                          ) : null}
+
+                          {/* Actions */}
+                          <View style={styles.tlActionsRow}>
+                            <TouchableOpacity
+                              style={styles.tlBuyPermanentBtn}
+                              onPress={() => handleBuyLoanInPermanently(player)}
+                              activeOpacity={0.8}>
+                              <Text style={styles.tlBuyPermanentBtnText}>✅ Tebus Permanen</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.tlReturnLoanBtn}
+                              onPress={() => handleReturnLoanIn(player)}>
+                              <Text style={styles.tlReturnLoanBtnText}>🔙 Pulangkan</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.tlEditBtn}
+                              onPress={() => openEditTransferLoan(player)}>
+                              <Text style={styles.tlEditBtnText}>✏️ Edit</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -1604,7 +1804,7 @@ export default function MoreMenuScreen() {
                 <Text style={styles.aboutBullet}>• 📊 Monitor Kebutuhan Kuota Posisi (Dual-Mode)</Text>
                 <Text style={styles.aboutBullet}>• 📁 Multi-Save Career Mode Profile Manager</Text>
                 <Text style={styles.aboutBullet}>• 🎯 Transfer Watchlist & Pengganti Pemain</Text>
-                <Text style={styles.aboutBullet}>• 📤 Transfer & Loan List (Jual & Pinjamkan)</Text>
+                <Text style={styles.aboutBullet}>• 📤 Transfer & Loan List (Jual, Loan Out, Loan In)</Text>
                 <Text style={styles.aboutBullet}>• 🏷️ Arsip Penjualan Pemain Terjual</Text>
                 <Text style={styles.aboutBullet}>• 💾 Backup & Restore Full JSON</Text>
               </View>
@@ -1815,7 +2015,7 @@ export default function MoreMenuScreen() {
         </Pressable>
       </Modal>
 
-      {/* ─── ADD/EDIT TRANSFER & LOAN MODAL (NEW) ───── */}
+      {/* ─── ADD/EDIT TRANSFER & LOAN MODAL (3 TYPES) ── */}
       <Modal
         visible={showAddTlModal}
         transparent
@@ -1862,7 +2062,7 @@ export default function MoreMenuScreen() {
                   {!tlEditPlayerTarget && <Text style={styles.selectorTriggerArrow}>PILIH ▾</Text>}
                 </TouchableOpacity>
 
-                {/* Field 2: Tipe Status (Akan Dijual vs Dipinjamkan) */}
+                {/* Field 2: Tipe Status (Akan Dijual vs Loan Out vs Loan In) */}
                 <Text style={[styles.fieldLabel, { marginTop: 12 }]}>TETAPKAN STATUS PEMAIN:</Text>
                 <View style={styles.tlTypeChoiceRow}>
                   <TouchableOpacity
@@ -1883,24 +2083,39 @@ export default function MoreMenuScreen() {
                   <TouchableOpacity
                     style={[
                       styles.tlTypeChoiceBtn,
-                      tlType === 'loan_out' && styles.tlTypeChoiceBtnActiveLoan,
+                      tlType === 'loan_out' && styles.tlTypeChoiceBtnActiveLoanOut,
                     ]}
                     onPress={() => setTlType('loan_out')}>
                     <Text
                       style={[
                         styles.tlTypeChoiceBtnText,
-                        tlType === 'loan_out' && styles.tlTypeChoiceBtnTextActiveLoan,
+                        tlType === 'loan_out' && styles.tlTypeChoiceBtnTextActiveLoanOut,
                       ]}>
-                      🟡 Dipinjamkan
+                      🟡 Loan Out
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.tlTypeChoiceBtn,
+                      tlType === 'loan_in' && styles.tlTypeChoiceBtnActiveLoanIn,
+                    ]}
+                    onPress={() => setTlType('loan_in')}>
+                    <Text
+                      style={[
+                        styles.tlTypeChoiceBtnText,
+                        tlType === 'loan_in' && styles.tlTypeChoiceBtnTextActiveLoanIn,
+                      ]}>
+                      🟢 Loan In
                     </Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* If Loan Out: Durasi Pinjaman (6 Bulan, 1 Tahun, 2 Tahun) */}
-                {tlType === 'loan_out' && (
+                {/* If Loan Out or Loan In: Durasi & Opsi Beli */}
+                {(tlType === 'loan_out' || tlType === 'loan_in') && (
                   <View style={{ marginTop: 12 }}>
                     <Text style={styles.fieldLabel}>DURASI PINJAMAN:</Text>
-                    <View style={styles.tlDurasiRow}>
+                    <View style={styles.durasiRow}>
                       {(['6_bulan', '1_tahun', '2_tahun'] as StatusDurasi[]).map((d) => {
                         const isSel = tlDurasi === d;
                         const label = d === '6_bulan' ? '6 Bulan' : d === '1_tahun' ? '1 Tahun' : '2 Tahun';
@@ -1957,13 +2172,17 @@ export default function MoreMenuScreen() {
                 <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
                   {tlType === 'akan_dijual'
                     ? 'ALASAN PENJUALAN / TARGET KLUB PEMINAT:'
-                    : 'CATATAN PINJAMAN / KLUB TUJUAN:'}
+                    : tlType === 'loan_in'
+                    ? 'KLUB ASAL / CATATAN PINJAMAN MASUK:'
+                    : 'CATATAN PINJAMAN KELUAR / KLUB TUJUAN:'}
                 </Text>
                 <TextInput
                   style={[styles.modalInput, { height: 65, textAlignVertical: 'top' }]}
                   placeholder={
                     tlType === 'akan_dijual'
                       ? 'misal: Surplus kuota sayap, butuh dana peremajaan bek'
+                      : tlType === 'loan_in'
+                      ? 'misal: Dipinjam dari Real Madrid dengan opsi tebus 40M'
                       : 'misal: Dipinjamkan ke Girona untuk menit bermain tim utama'
                   }
                   placeholderTextColor="#999"
@@ -2802,14 +3021,14 @@ const styles = StyleSheet.create({
     color: '#D4AF37',
   },
 
-  // Segmented Bar (Transfer & Loan)
+  // Segmented Bar (Transfer & Loan - 3 Buttons)
   tlSegmentBar: {
     flexDirection: 'row',
     backgroundColor: '#FAFAFA',
     borderBottomWidth: 2,
     borderBottomColor: '#000',
     padding: 8,
-    gap: 8,
+    gap: 6,
   },
   tlSegmentBtn: {
     flex: 1,
@@ -2823,11 +3042,14 @@ const styles = StyleSheet.create({
   tlSegmentBtnActiveJual: {
     backgroundColor: '#C5221F',
   },
-  tlSegmentBtnActiveLoan: {
-    backgroundColor: '#0A1128',
+  tlSegmentBtnActiveLoanOut: {
+    backgroundColor: '#B06000',
+  },
+  tlSegmentBtnActiveLoanIn: {
+    backgroundColor: '#137333',
   },
   tlSegmentBtnText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '900',
     color: '#000',
     letterSpacing: 0.5,
@@ -2835,8 +3057,11 @@ const styles = StyleSheet.create({
   tlSegmentBtnTextActiveJual: {
     color: '#FFF',
   },
-  tlSegmentBtnTextActiveLoan: {
-    color: '#D4AF37',
+  tlSegmentBtnTextActiveLoanOut: {
+    color: '#FFF',
+  },
+  tlSegmentBtnTextActiveLoanIn: {
+    color: '#FFF',
   },
 
   // Filters Container (Shared)
@@ -3097,7 +3322,7 @@ const styles = StyleSheet.create({
     color: '#C5221F',
   },
 
-  // Transfer & Loan Cards (Jual & Loan)
+  // Transfer & Loan Cards (Jual, Loan Out, Loan In)
   tlSellCard: {
     backgroundColor: '#FFF8F6',
     borderWidth: 2.5,
@@ -3111,9 +3336,21 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   tlLoanCard: {
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FFFAF0',
     borderWidth: 2.5,
-    borderColor: '#0A1128',
+    borderColor: '#B06000',
+    padding: 14,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  tlLoanInCard: {
+    backgroundColor: '#F3FCF5',
+    borderWidth: 2.5,
+    borderColor: '#137333',
     padding: 14,
     marginBottom: 14,
     shadowColor: '#000',
@@ -3268,6 +3505,32 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#D4AF37',
   },
+  tlBuyPermanentBtn: {
+    flex: 1.5,
+    backgroundColor: '#137333',
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#000',
+  },
+  tlBuyPermanentBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#FFF',
+  },
+  tlReturnLoanBtn: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#C5221F',
+    paddingVertical: 8,
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+  },
+  tlReturnLoanBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#C5221F',
+  },
   tlCancelBtn: {
     flex: 1,
     borderWidth: 1.5,
@@ -3297,7 +3560,7 @@ const styles = StyleSheet.create({
   // Transfer & Loan Form Styles
   tlTypeChoiceRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     marginBottom: 6,
   },
   tlTypeChoiceBtn: {
@@ -3311,24 +3574,25 @@ const styles = StyleSheet.create({
   tlTypeChoiceBtnActiveJual: {
     backgroundColor: '#C5221F',
   },
-  tlTypeChoiceBtnActiveLoan: {
-    backgroundColor: '#0A1128',
+  tlTypeChoiceBtnActiveLoanOut: {
+    backgroundColor: '#B06000',
+  },
+  tlTypeChoiceBtnActiveLoanIn: {
+    backgroundColor: '#137333',
   },
   tlTypeChoiceBtnText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '900',
     color: '#333',
   },
   tlTypeChoiceBtnTextActiveJual: {
     color: '#FFF',
   },
-  tlTypeChoiceBtnTextActiveLoan: {
-    color: '#D4AF37',
+  tlTypeChoiceBtnTextActiveLoanOut: {
+    color: '#FFF',
   },
-  tlDurasiRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 6,
+  tlTypeChoiceBtnTextActiveLoanIn: {
+    color: '#FFF',
   },
   tlDurasiBtn: {
     flex: 1,
@@ -3488,14 +3752,24 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
   loanBadgeTag: {
-    backgroundColor: '#0A1128',
+    backgroundColor: '#B06000',
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
   loanBadgeTagText: {
     fontSize: 8.5,
     fontWeight: '900',
-    color: '#D4AF37',
+    color: '#FFF',
+  },
+  loanInBadgeTag: {
+    backgroundColor: '#137333',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  loanInBadgeTagText: {
+    fontSize: 8.5,
+    fontWeight: '900',
+    color: '#FFF',
   },
 
   // Categorized Position Modals (Shared with Players screen)
@@ -4107,5 +4381,10 @@ const styles = StyleSheet.create({
     height: 180,
     textAlignVertical: 'top',
     marginBottom: 12,
+  },
+  durasiRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 6,
   },
 });

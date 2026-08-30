@@ -39,9 +39,9 @@ export async function validatePlayerPool(profileId: string): Promise<PoolValidat
   const squads = await listSquadsWithDetails(profileId);
   const allPlayers = await listPlayers(profileId);
 
-  // Eligible pool: aktif or akan_dijual
+  // Eligible pool: aktif, loan_in, or akan_dijual
   const activePlayers = allPlayers.filter(
-    (p) => p.status === 'aktif' || p.status === 'akan_dijual'
+    (p) => p.status === 'aktif' || p.status === 'akan_dijual' || p.status === 'loan_in'
   );
 
   // Count slots needed per position across T1, T2, T3 (unique starters required)
@@ -155,9 +155,9 @@ export async function autoGenerateTeamSheets(
   const squads = await listSquadsWithDetails(profileId);
   const allPlayers = await listPlayers(profileId);
 
-  // Filter pool: aktif or akan_dijual
+  // Filter pool: aktif, loan_in, or akan_dijual
   const activePlayers = allPlayers.filter(
-    (p) => p.status === 'aktif' || p.status === 'akan_dijual'
+    (p) => p.status === 'aktif' || p.status === 'akan_dijual' || p.status === 'loan_in'
   );
 
   // Ensure all 4 squads have a formation assigned

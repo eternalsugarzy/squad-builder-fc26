@@ -36,6 +36,7 @@ import type {
 
 const STATUS_CONFIG: Record<PlayerStatus, { label: string; bg: string; text: string }> = {
   aktif: { label: 'AKTIF', bg: '#E6F4EA', text: '#137333' },
+  loan_in: { label: 'LOAN IN', bg: '#D4EDDA', text: '#155724' },
   loan_out: { label: 'LOAN OUT', bg: '#FEF7E0', text: '#B06000' },
   injured: { label: 'INJURED', bg: '#FCE8E6', text: '#C5221F' },
   akan_dijual: { label: 'AKAN DIJUAL', bg: '#FEEFC3', text: '#762700' },
@@ -308,9 +309,11 @@ export default function PlayersScreen() {
         ovr_current: formOvr,
         status: formStatus,
         status_durasi:
-          formStatus === 'loan_out' || formStatus === 'injured' ? formDurasi : null,
+          formStatus === 'loan_out' || formStatus === 'loan_in' || formStatus === 'injured'
+            ? formDurasi
+            : null,
         status_mulai:
-          formStatus === 'loan_out' || formStatus === 'injured'
+          formStatus === 'loan_out' || formStatus === 'loan_in' || formStatus === 'injured'
             ? new Date().toISOString()
             : null,
         status_catatan: formCatatan.trim() || null,
@@ -341,9 +344,11 @@ export default function PlayersScreen() {
         ovr_current: formOvr,
         status: formStatus,
         status_durasi:
-          formStatus === 'loan_out' || formStatus === 'injured' ? formDurasi : null,
+          formStatus === 'loan_out' || formStatus === 'loan_in' || formStatus === 'injured'
+            ? formDurasi
+            : null,
         status_mulai:
-          formStatus === 'loan_out' || formStatus === 'injured'
+          formStatus === 'loan_out' || formStatus === 'loan_in' || formStatus === 'injured'
             ? editPlayer.status_mulai ?? new Date().toISOString()
             : null,
         status_catatan: formCatatan.trim() || null,
@@ -883,7 +888,7 @@ export default function PlayersScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {(['aktif', 'loan_out', 'injured', 'akan_dijual'] as PlayerStatus[]).map((st) => {
+              {(['aktif', 'loan_in', 'loan_out', 'injured', 'akan_dijual'] as PlayerStatus[]).map((st) => {
                 const count = players.filter((p) => p.status === st).length;
                 const isSelected = filterStatus === st;
                 const cfg = STATUS_CONFIG[st];
@@ -929,13 +934,14 @@ export default function PlayersScreen() {
         <Pressable style={styles.modalOverlay} onPress={() => setShowAddModal(false)}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalCenter}>
             <Pressable style={styles.formModalCard} onPress={(e) => e.stopPropagation()}>
-              <Text style={styles.modalTitle}>TAMBAH PEMAIN</Text>
-              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+              <Text style={styles.modalTitle}>TAMBAH PEMAIN BARU</Text>
+
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
                 {/* Name */}
                 <Text style={styles.inputLabel}>NAMA PEMAIN</Text>
                 <TextInput
                   style={styles.modalInput}
-                  placeholder="Misal: Rodrygo"
+                  placeholder="Nama Pemain (misal: Saka, Saliba)"
                   placeholderTextColor="#999"
                   value={formNama}
                   onChangeText={setFormNama}
@@ -967,15 +973,12 @@ export default function PlayersScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Position Multi-select */}
-                <Text style={styles.inputLabel}>
-                  POSISI (Tap untuk pilih, Posisi pertama = UTAMA)
-                </Text>
+                {/* Position Selection */}
+                <Text style={styles.inputLabel}>POSISI (PILIH MINIMAL 1, TAP LAMA = UTAMA)</Text>
                 <View style={styles.positionsSelectGrid}>
                   {positions.map((pos) => {
                     const isSelected = formPositionIds.includes(pos.id);
                     const isPrimary = formPositionIds[0] === pos.id;
-
                     return (
                       <TouchableOpacity
                         key={pos.id}
@@ -1002,7 +1005,7 @@ export default function PlayersScreen() {
                 {/* Status */}
                 <Text style={styles.inputLabel}>STATUS</Text>
                 <View style={styles.statusGrid}>
-                  {(['aktif', 'loan_out', 'injured', 'akan_dijual', 'sudah_dijual'] as PlayerStatus[]).map((st) => (
+                  {(['aktif', 'loan_in', 'loan_out', 'injured', 'akan_dijual'] as PlayerStatus[]).map((st) => (
                     <TouchableOpacity
                       key={st}
                       style={[styles.statusOption, formStatus === st && styles.statusOptionActive]}
@@ -1018,10 +1021,10 @@ export default function PlayersScreen() {
                   ))}
                 </View>
 
-                {/* Durasi if loan_out / injured */}
-                {(formStatus === 'loan_out' || formStatus === 'injured') && (
+                {/* Durasi if loan_in / loan_out / injured */}
+                {(formStatus === 'loan_out' || formStatus === 'loan_in' || formStatus === 'injured') && (
                   <View style={{ marginTop: 12 }}>
-                    <Text style={styles.inputLabel}>DURASI</Text>
+                    <Text style={styles.inputLabel}>DURASI PINJAMAN / CEDERA</Text>
                     <View style={styles.durasiRow}>
                       {(['6_bulan', '1_tahun', '2_tahun'] as StatusDurasi[]).map((d) => (
                         <TouchableOpacity
@@ -1156,7 +1159,7 @@ export default function PlayersScreen() {
                 {/* Status */}
                 <Text style={styles.inputLabel}>STATUS</Text>
                 <View style={styles.statusGrid}>
-                  {(['aktif', 'loan_out', 'injured', 'akan_dijual', 'sudah_dijual'] as PlayerStatus[]).map((st) => (
+                  {(['aktif', 'loan_in', 'loan_out', 'injured', 'akan_dijual', 'sudah_dijual'] as PlayerStatus[]).map((st) => (
                     <TouchableOpacity
                       key={st}
                       style={[styles.statusOption, formStatus === st && styles.statusOptionActive]}
@@ -1172,10 +1175,10 @@ export default function PlayersScreen() {
                   ))}
                 </View>
 
-                {/* Durasi if loan_out / injured */}
-                {(formStatus === 'loan_out' || formStatus === 'injured') && (
+                {/* Durasi if loan_in / loan_out / injured */}
+                {(formStatus === 'loan_out' || formStatus === 'loan_in' || formStatus === 'injured') && (
                   <View style={{ marginTop: 12 }}>
-                    <Text style={styles.inputLabel}>DURASI</Text>
+                    <Text style={styles.inputLabel}>DURASI PINJAMAN / CEDERA</Text>
                     <View style={styles.durasiRow}>
                       {(['6_bulan', '1_tahun', '2_tahun'] as StatusDurasi[]).map((d) => (
                         <TouchableOpacity
