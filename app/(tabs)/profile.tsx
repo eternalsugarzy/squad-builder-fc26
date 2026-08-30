@@ -77,6 +77,7 @@ export default function MoreMenuScreen() {
 
   // Watchlist Add/Edit Form State
   const [showWatchModal, setShowWatchModal] = useState(false);
+  const [wModalView, setWModalView] = useState<'form' | 'pick_pos' | 'pick_player'>('form');
   const [watchEditTarget, setWatchEditTarget] = useState<WatchlistWithDetails | null>(null);
   const [wNamaTarget, setWNamaTarget] = useState('');
   const [wPosId, setWPosId] = useState('');
@@ -84,10 +85,6 @@ export default function MoreMenuScreen() {
   const [wOvrMax, setWOvrMax] = useState('');
   const [wCatatan, setWCatatan] = useState('');
   const [wTerkaitPlayerId, setWTerkaitPlayerId] = useState<string | null>(null);
-
-  // Pickers Modals inside Watchlist Form
-  const [showPosPickerModal, setShowPosPickerModal] = useState(false);
-  const [showPlayerPickerModal, setShowPlayerPickerModal] = useState(false);
   const [playerPickerSearch, setPlayerPickerSearch] = useState('');
 
   // ─── Transfer & Loan List State ───────────────────
@@ -96,15 +93,15 @@ export default function MoreMenuScreen() {
   const [tlFilterPos, setTlFilterPos] = useState('ALL');
   const [showTlFilterPosModal, setShowTlFilterPosModal] = useState(false);
 
-  // Transfer & Loan Add/Edit Modal State
+  // Transfer & Loan Add/Edit Modal State (Single robust modal with view switching)
   const [showAddTlModal, setShowAddTlModal] = useState(false);
+  const [tlModalView, setTlModalView] = useState<'form' | 'pick_player'>('form');
   const [tlEditPlayerTarget, setTlEditPlayerTarget] = useState<PlayerWithPositions | null>(null);
   const [tlSelectedPlayerId, setTlSelectedPlayerId] = useState<string | null>(null);
   const [tlType, setTlType] = useState<'akan_dijual' | 'loan_out' | 'loan_in'>('akan_dijual');
   const [tlDurasi, setTlDurasi] = useState<StatusDurasi>('1_tahun');
   const [tlIsOpsiBeli, setTlIsOpsiBeli] = useState(false);
   const [tlCatatan, setTlCatatan] = useState('');
-  const [showTlPlayerPickerModal, setShowTlPlayerPickerModal] = useState(false);
   const [tlPlayerPickerSearch, setTlPlayerPickerSearch] = useState('');
 
   const loadData = useCallback(async () => {
@@ -237,7 +234,7 @@ export default function MoreMenuScreen() {
   const selectedTlFilterPosObj = positions.find((p) => p.id === tlFilterPos);
   const selectedTlPlayerObj = players.find((p) => p.id === tlSelectedPlayerId);
 
-  // Filtered players inside Replacement Picker Modal (for Watchlist Form)
+  // Filtered players inside Replacement Picker (for Watchlist Form)
   const pickerFilteredPlayers = useMemo(() => {
     return players
       .filter((p) => p.status !== 'sudah_dijual')
@@ -388,6 +385,7 @@ export default function MoreMenuScreen() {
   // ─── Watchlist Handlers ───────────────────────────
   function openAddWatchlist(presetPlayer?: PlayerWithPositions) {
     setWatchEditTarget(null);
+    setWModalView('form');
     setWNamaTarget('');
     setWPosId(presetPlayer ? presetPlayer.positions[0]?.id ?? positions[0]?.id : positions[0]?.id ?? '');
     setWOvrMin('78');
@@ -399,6 +397,7 @@ export default function MoreMenuScreen() {
 
   function openEditWatchlist(item: WatchlistWithDetails) {
     setWatchEditTarget(item);
+    setWModalView('form');
     setWNamaTarget(item.nama_target ?? '');
     setWPosId(item.position_id);
     setWOvrMin(item.target_ovr_min ? String(item.target_ovr_min) : '');
@@ -476,16 +475,21 @@ export default function MoreMenuScreen() {
   // ─── Transfer & Loan Handlers ─────────────────────
   function openAddTransferLoan() {
     setTlEditPlayerTarget(null);
-    setTlSelectedPlayerId(players.find((p) => p.status === 'aktif')?.id ?? null);
+    setTlModalView('form');
+    // Pre-select first available active squad player
+    const defaultPlayer = players.find((p) => p.status === 'aktif') ?? players[0];
+    setTlSelectedPlayerId(defaultPlayer?.id ?? null);
     setTlType(tlSubTab === 'loan_in' ? 'loan_in' : tlSubTab === 'loan_out' ? 'loan_out' : 'akan_dijual');
     setTlDurasi('1_tahun');
     setTlIsOpsiBeli(false);
     setTlCatatan('');
+    setTlPlayerPickerSearch('');
     setShowAddTlModal(true);
   }
 
   function openEditTransferLoan(player: PlayerWithPositions) {
     setTlEditPlayerTarget(player);
+    setTlModalView('form');
     setTlSelectedPlayerId(player.id);
     setTlType(player.status === 'loan_in' ? 'loan_in' : player.status === 'loan_out' ? 'loan_out' : 'akan_dijual');
     setTlDurasi(player.status_durasi ?? '1_tahun');
@@ -493,6 +497,7 @@ export default function MoreMenuScreen() {
     setTlIsOpsiBeli(hasOpsiBeli);
     const cleanNote = (player.status_catatan ?? '').replace('[OPSI BELI] ', '').replace('[OPSI BELI]', '');
     setTlCatatan(cleanNote);
+    setTlPlayerPickerSearch('');
     setShowAddTlModal(true);
   }
 
@@ -1887,7 +1892,7 @@ export default function MoreMenuScreen() {
         </Pressable>
       </Modal>
 
-      {/* ─── ADD/EDIT WATCHLIST MODAL ───────────────── */}
+      {/* ─── ADD/EDIT WATCHLIST MODAL (NO MODAL-ON-MODAL CONFLICT) ─ */}
       <Modal
         visible={showWatchModal}
         transparent
@@ -1898,124 +1903,374 @@ export default function MoreMenuScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.modalCenter}>
             <Pressable style={styles.formModalCard} onPress={(e) => e.stopPropagation()}>
-              <Text style={styles.modalTitle}>
-                {watchEditTarget ? '✏️ EDIT TARGET TRANSFER' : '🎯 TAMBAH TARGET TRANSFER'}
-              </Text>
+              {/* VIEW 1: FORM */}
+              {wModalView === 'form' && (
+                <>
+                  <Text style={styles.modalTitle}>
+                    {watchEditTarget ? '✏️ EDIT TARGET TRANSFER' : '🎯 TAMBAH TARGET TRANSFER'}
+                  </Text>
 
-              <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
-                {/* Field 1: Nama Pemain Target */}
-                <Text style={styles.fieldLabel}>NAMA PEMAIN TARGET (MISAL: F. WIRTZ / MBAPPÉ):</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="Masukkan nama target transfer..."
-                  placeholderTextColor="#999"
-                  value={wNamaTarget}
-                  onChangeText={setWNamaTarget}
-                />
+                  <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+                    {/* Field 1: Nama Pemain Target */}
+                    <Text style={styles.fieldLabel}>NAMA PEMAIN TARGET (MISAL: F. WIRTZ / MBAPPÉ):</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Masukkan nama target transfer..."
+                      placeholderTextColor="#999"
+                      value={wNamaTarget}
+                      onChangeText={setWNamaTarget}
+                    />
 
-                {/* Field 2: Posisi Target (Large Trigger Button) */}
-                <Text style={styles.fieldLabel}>POSISI TARGET:</Text>
-                <TouchableOpacity
-                  style={styles.selectorTriggerBtn}
-                  onPress={() => setShowPosPickerModal(true)}
-                  activeOpacity={0.8}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <View style={styles.selectorTriggerBadge}>
-                      <Text style={styles.selectorTriggerBadgeText}>
-                        {selectedFormPos?.nama ?? 'POSISI'}
-                      </Text>
+                    {/* Field 2: Posisi Target */}
+                    <Text style={styles.fieldLabel}>POSISI TARGET:</Text>
+                    <TouchableOpacity
+                      style={styles.selectorTriggerBtn}
+                      onPress={() => setWModalView('pick_pos')}
+                      activeOpacity={0.8}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={styles.selectorTriggerBadge}>
+                          <Text style={styles.selectorTriggerBadgeText}>
+                            {selectedFormPos?.nama ?? 'POSISI'}
+                          </Text>
+                        </View>
+                        <Text style={styles.selectorTriggerText}>
+                          {selectedFormPos ? `Posisi: ${selectedFormPos.nama}` : 'Pilih Posisi'}
+                        </Text>
+                      </View>
+                      <Text style={styles.selectorTriggerArrow}>UBAH ▾</Text>
+                    </TouchableOpacity>
+
+                    {/* Field 3: Target OVR Range */}
+                    <View style={{ flexDirection: 'row', gap: 10, marginVertical: 12 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fieldLabel}>OVR MIN:</Text>
+                        <TextInput
+                          style={styles.modalInput}
+                          placeholder="78"
+                          placeholderTextColor="#999"
+                          value={wOvrMin}
+                          onChangeText={setWOvrMin}
+                          keyboardType="number-pad"
+                          maxLength={2}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fieldLabel}>OVR MAX:</Text>
+                        <TextInput
+                          style={styles.modalInput}
+                          placeholder="84"
+                          placeholderTextColor="#999"
+                          value={wOvrMax}
+                          onChangeText={setWOvrMax}
+                          keyboardType="number-pad"
+                          maxLength={2}
+                        />
+                      </View>
                     </View>
-                    <Text style={styles.selectorTriggerText}>
-                      {selectedFormPos ? `Posisi: ${selectedFormPos.nama}` : 'Pilih Posisi'}
-                    </Text>
-                  </View>
-                  <Text style={styles.selectorTriggerArrow}>UBAH ▾</Text>
-                </TouchableOpacity>
 
-                {/* Field 3: Target OVR Range */}
-                <View style={{ flexDirection: 'row', gap: 10, marginVertical: 12 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.fieldLabel}>OVR MIN:</Text>
-                    <TextInput
-                      style={styles.modalInput}
-                      placeholder="78"
-                      placeholderTextColor="#999"
-                      value={wOvrMin}
-                      onChangeText={setWOvrMin}
-                      keyboardType="number-pad"
-                      maxLength={2}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.fieldLabel}>OVR MAX:</Text>
-                    <TextInput
-                      style={styles.modalInput}
-                      placeholder="84"
-                      placeholderTextColor="#999"
-                      value={wOvrMax}
-                      onChangeText={setWOvrMax}
-                      keyboardType="number-pad"
-                      maxLength={2}
-                    />
-                  </View>
-                </View>
+                    {/* Field 4: Pemain yang Akan Digantikan */}
+                    <Text style={styles.fieldLabel}>AKAN MENGGANTIKAN PEMAIN (OPSIONAL):</Text>
+                    <TouchableOpacity
+                      style={styles.selectorTriggerBtn}
+                      onPress={() => {
+                        setPlayerPickerSearch('');
+                        setWModalView('pick_player');
+                      }}
+                      activeOpacity={0.8}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                        <View
+                          style={[
+                            styles.selectorTriggerBadge,
+                            { backgroundColor: selectedFormPlayer ? '#0A1128' : '#666' },
+                          ]}>
+                          <Text style={styles.selectorTriggerBadgeText}>
+                            {selectedFormPlayer ? `OVR ${selectedFormPlayer.ovr_current}` : 'SKUAD'}
+                          </Text>
+                        </View>
+                        <Text style={styles.selectorTriggerText} numberOfLines={1}>
+                          {selectedFormPlayer
+                            ? `${selectedFormPlayer.nama} (${selectedFormPlayer.positions[0]?.nama ?? '-'})`
+                            : 'Tanpa Pengganti (Tambahan Skuad)'}
+                        </Text>
+                      </View>
+                      <Text style={styles.selectorTriggerArrow}>PILIH ▾</Text>
+                    </TouchableOpacity>
 
-                {/* Field 4: Pemain yang Akan Digantikan */}
-                <Text style={styles.fieldLabel}>AKAN MENGGANTIKAN PEMAIN (OPSIONAL):</Text>
-                <TouchableOpacity
-                  style={styles.selectorTriggerBtn}
-                  onPress={() => {
-                    setPlayerPickerSearch('');
-                    setShowPlayerPickerModal(true);
-                  }}
-                  activeOpacity={0.8}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                    <View
+                    {/* Field 5: Catatan Target */}
+                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>CATATAN TRANSFER:</Text>
+                    <TextInput
+                      style={[styles.modalInput, { height: 65, textAlignVertical: 'top' }]}
+                      placeholder="misal: Klausul rilis, butuh playmaker pengganti, dll."
+                      placeholderTextColor="#999"
+                      value={wCatatan}
+                      onChangeText={setWCatatan}
+                      multiline
+                    />
+                  </ScrollView>
+
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={styles.modalCancelBtn}
+                      onPress={() => setShowWatchModal(false)}>
+                      <Text style={styles.modalCancelText}>BATAL</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleSaveWatchlist}>
+                      <Text style={styles.modalConfirmText}>SIMPAN TARGET</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
+              {/* VIEW 2: PICK POSITION FOR WATCHLIST */}
+              {wModalView === 'pick_pos' && (
+                <>
+                  <View style={styles.filterModalHeader}>
+                    <Text style={styles.filterModalTitle}>PILIH POSISI TARGET TRANSFER</Text>
+                    <TouchableOpacity onPress={() => setWModalView('form')} style={styles.modalCloseBtn}>
+                      <Text style={styles.modalCloseBtnText}>← KEMBALI</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+                    {/* Kiper */}
+                    {gkPositions.length > 0 && (
+                      <View style={styles.posCategorySection}>
+                        <Text style={styles.posCategoryHeader}>🧤 PENJAGA GAWANG</Text>
+                        <View style={styles.posCategoryGrid}>
+                          {gkPositions.map((pos) => (
+                            <TouchableOpacity
+                              key={pos.id}
+                              style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
+                              onPress={() => {
+                                setWPosId(pos.id);
+                                setWModalView('form');
+                              }}>
+                              <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
+                                {pos.nama}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Bek */}
+                    {defPositions.length > 0 && (
+                      <View style={styles.posCategorySection}>
+                        <Text style={styles.posCategoryHeader}>🛡️ BEK (DEFENDER)</Text>
+                        <View style={styles.posCategoryGrid}>
+                          {defPositions.map((pos) => (
+                            <TouchableOpacity
+                              key={pos.id}
+                              style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
+                              onPress={() => {
+                                setWPosId(pos.id);
+                                setWModalView('form');
+                              }}>
+                              <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
+                                {pos.nama}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Gelandang */}
+                    {midPositions.length > 0 && (
+                      <View style={styles.posCategorySection}>
+                        <Text style={styles.posCategoryHeader}>⚙️ GELANDANG (MIDFIELDER)</Text>
+                        <View style={styles.posCategoryGrid}>
+                          {midPositions.map((pos) => (
+                            <TouchableOpacity
+                              key={pos.id}
+                              style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
+                              onPress={() => {
+                                setWPosId(pos.id);
+                                setWModalView('form');
+                              }}>
+                              <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
+                                {pos.nama}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Penyerang */}
+                    {attPositions.length > 0 && (
+                      <View style={styles.posCategorySection}>
+                        <Text style={styles.posCategoryHeader}>⚡ PENYERANG (ATTACKER)</Text>
+                        <View style={styles.posCategoryGrid}>
+                          {attPositions.map((pos) => (
+                            <TouchableOpacity
+                              key={pos.id}
+                              style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
+                              onPress={() => {
+                                setWPosId(pos.id);
+                                setWModalView('form');
+                              }}>
+                              <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
+                                {pos.nama}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Lainnya */}
+                    {otherPositions.length > 0 && (
+                      <View style={styles.posCategorySection}>
+                        <Text style={styles.posCategoryHeader}>LAINNYA</Text>
+                        <View style={styles.posCategoryGrid}>
+                          {otherPositions.map((pos) => (
+                            <TouchableOpacity
+                              key={pos.id}
+                              style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
+                              onPress={() => {
+                                setWPosId(pos.id);
+                                setWModalView('form');
+                              }}>
+                              <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
+                                {pos.nama}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </ScrollView>
+
+                  <TouchableOpacity
+                    style={styles.modalBottomBtn}
+                    onPress={() => setWModalView('form')}>
+                    <Text style={styles.modalBottomBtnText}>BATAL PILIH</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* VIEW 3: PICK REPLACEMENT PLAYER FOR WATCHLIST */}
+              {wModalView === 'pick_player' && (
+                <>
+                  <View style={styles.filterModalHeader}>
+                    <Text style={styles.filterModalTitle}>PILIH PEMAIN PENGGANTI</Text>
+                    <TouchableOpacity onPress={() => setWModalView('form')} style={styles.modalCloseBtn}>
+                      <Text style={styles.modalCloseBtnText}>← KEMBALI</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={[styles.wSearchRow, { marginHorizontal: 0, marginBottom: 10 }]}>
+                    <TextInput
+                      style={styles.wSearchInput}
+                      placeholder="🔍 Cari pemain berdasarkan nama/posisi..."
+                      placeholderTextColor="#888"
+                      value={playerPickerSearch}
+                      onChangeText={setPlayerPickerSearch}
+                    />
+                    {playerPickerSearch.length > 0 && (
+                      <TouchableOpacity
+                        onPress={() => setPlayerPickerSearch('')}
+                        style={styles.wSearchClearBtn}>
+                        <Text style={styles.wSearchClearText}>✕</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                    {/* Option: Tanpa Pengganti */}
+                    <TouchableOpacity
                       style={[
-                        styles.selectorTriggerBadge,
-                        { backgroundColor: selectedFormPlayer ? '#0A1128' : '#666' },
-                      ]}>
-                      <Text style={styles.selectorTriggerBadgeText}>
-                        {selectedFormPlayer ? `OVR ${selectedFormPlayer.ovr_current}` : 'SKUAD'}
-                      </Text>
-                    </View>
-                    <Text style={styles.selectorTriggerText} numberOfLines={1}>
-                      {selectedFormPlayer
-                        ? `${selectedFormPlayer.nama} (${selectedFormPlayer.positions[0]?.nama ?? '-'})`
-                        : 'Tanpa Pengganti (Tambahan Skuad)'}
-                    </Text>
-                  </View>
-                  <Text style={styles.selectorTriggerArrow}>PILIH ▾</Text>
-                </TouchableOpacity>
+                        styles.playerPickerItem,
+                        wTerkaitPlayerId === null && styles.playerPickerItemActive,
+                      ]}
+                      onPress={() => {
+                        setWTerkaitPlayerId(null);
+                        setWModalView('form');
+                      }}>
+                      <View style={styles.playerPickerItemLeft}>
+                        <View style={[styles.playerPickerOvrBadge, { backgroundColor: '#666' }]}>
+                          <Text style={styles.playerPickerOvrText}>-</Text>
+                        </View>
+                        <View>
+                          <Text
+                            style={[
+                              styles.playerPickerName,
+                              wTerkaitPlayerId === null && styles.playerPickerNameActive,
+                            ]}>
+                            Tanpa Pengganti
+                          </Text>
+                          <Text style={styles.playerPickerSub}>
+                            Target transfer ini sebagai tambahan skuad baru
+                          </Text>
+                        </View>
+                      </View>
+                      {wTerkaitPlayerId === null && <Text style={styles.playerPickerCheck}>✓</Text>}
+                    </TouchableOpacity>
 
-                {/* Field 5: Catatan Target */}
-                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>CATATAN TRANSFER:</Text>
-                <TextInput
-                  style={[styles.modalInput, { height: 65, textAlignVertical: 'top' }]}
-                  placeholder="misal: Klausul rilis, butuh playmaker pengganti, dll."
-                  placeholderTextColor="#999"
-                  value={wCatatan}
-                  onChangeText={setWCatatan}
-                  multiline
-                />
-              </ScrollView>
+                    {/* List of squad players */}
+                    {pickerFilteredPlayers.map((p) => {
+                      const isSelected = wTerkaitPlayerId === p.id;
+                      const primaryPos = p.positions[0]?.nama ?? '-';
+                      const isAkanDijual = p.status === 'akan_dijual';
 
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={styles.modalCancelBtn}
-                  onPress={() => setShowWatchModal(false)}>
-                  <Text style={styles.modalCancelText}>BATAL</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleSaveWatchlist}>
-                  <Text style={styles.modalConfirmText}>SIMPAN TARGET</Text>
-                </TouchableOpacity>
-              </View>
+                      return (
+                        <TouchableOpacity
+                          key={p.id}
+                          style={[
+                            styles.playerPickerItem,
+                            isSelected && styles.playerPickerItemActive,
+                            isAkanDijual && styles.playerPickerItemRecommended,
+                          ]}
+                          onPress={() => {
+                            setWTerkaitPlayerId(p.id);
+                            setWModalView('form');
+                          }}>
+                          <View style={styles.playerPickerItemLeft}>
+                            <View style={styles.playerPickerOvrBadge}>
+                              <Text style={styles.playerPickerOvrText}>{p.ovr_current}</Text>
+                              <Text style={styles.playerPickerPosText}>{primaryPos}</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text
+                                  style={[
+                                    styles.playerPickerName,
+                                    isSelected && styles.playerPickerNameActive,
+                                  ]}>
+                                  {p.nama}
+                                </Text>
+                                {isAkanDijual && (
+                                  <View style={styles.akanDijualTag}>
+                                    <Text style={styles.akanDijualTagText}>AKAN DIJUAL</Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text style={styles.playerPickerSub}>
+                                Posisi: {p.positions.map((pos) => pos.nama).join(', ')} • Status: {p.status.toUpperCase()}
+                              </Text>
+                            </View>
+                          </View>
+                          {isSelected && <Text style={styles.playerPickerCheck}>✓</Text>}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+
+                  <TouchableOpacity
+                    style={styles.modalBottomBtn}
+                    onPress={() => setWModalView('form')}>
+                    <Text style={styles.modalBottomBtnText}>BATAL</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </Pressable>
           </KeyboardAvoidingView>
         </Pressable>
       </Modal>
 
-      {/* ─── ADD/EDIT TRANSFER & LOAN MODAL (3 TYPES) ── */}
+      {/* ─── ADD/EDIT TRANSFER & LOAN MODAL (SINGLE ROBUST MODAL) ─ */}
       <Modal
         visible={showAddTlModal}
         transparent
@@ -2026,182 +2281,269 @@ export default function MoreMenuScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.modalCenter}>
             <Pressable style={styles.formModalCard} onPress={(e) => e.stopPropagation()}>
-              <Text style={styles.modalTitle}>
-                {tlEditPlayerTarget
-                  ? `✏️ EDIT STATUS TRANSFER / PINJAMAN`
-                  : `📤 TAMBAH KE DAFTAR JUAL / PINJAM`}
-              </Text>
+              {/* VIEW 1: FORM INPUT */}
+              {tlModalView === 'form' && (
+                <>
+                  <Text style={styles.modalTitle}>
+                    {tlEditPlayerTarget
+                      ? `✏️ EDIT STATUS TRANSFER / PINJAMAN`
+                      : `📤 TAMBAH KE DAFTAR JUAL / PINJAM`}
+                  </Text>
 
-              <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
-                {/* Field 1: Pilih Pemain Skuad */}
-                <Text style={styles.fieldLabel}>PILIH PEMAIN SKUAD:</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.selectorTriggerBtn,
-                    tlEditPlayerTarget !== null && { opacity: 0.8 },
-                  ]}
-                  onPress={() => {
-                    if (tlEditPlayerTarget) return; // cannot change player in edit mode
-                    setTlPlayerPickerSearch('');
-                    setShowTlPlayerPickerModal(true);
-                  }}
-                  disabled={tlEditPlayerTarget !== null}
-                  activeOpacity={0.8}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                    <View style={styles.selectorTriggerBadge}>
-                      <Text style={styles.selectorTriggerBadgeText}>
-                        {selectedTlPlayerObj ? `OVR ${selectedTlPlayerObj.ovr_current}` : 'PILIH'}
-                      </Text>
+                  <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+                    {/* Field 1: Pilih Pemain Skuad */}
+                    <Text style={styles.fieldLabel}>PILIH PEMAIN SKUAD:</Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.selectorTriggerBtn,
+                        tlEditPlayerTarget !== null && { opacity: 0.8 },
+                      ]}
+                      onPress={() => {
+                        if (tlEditPlayerTarget) return; // cannot change player in edit mode
+                        setTlPlayerPickerSearch('');
+                        setTlModalView('pick_player');
+                      }}
+                      disabled={tlEditPlayerTarget !== null}
+                      activeOpacity={0.8}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                        <View style={styles.selectorTriggerBadge}>
+                          <Text style={styles.selectorTriggerBadgeText}>
+                            {selectedTlPlayerObj ? `OVR ${selectedTlPlayerObj.ovr_current}` : 'PILIH'}
+                          </Text>
+                        </View>
+                        <Text style={styles.selectorTriggerText} numberOfLines={1}>
+                          {selectedTlPlayerObj
+                            ? `${selectedTlPlayerObj.nama} (${selectedTlPlayerObj.positions[0]?.nama ?? '-'})`
+                            : 'Pilih Pemain Skuad'}
+                        </Text>
+                      </View>
+                      {!tlEditPlayerTarget && <Text style={styles.selectorTriggerArrow}>GANTI ▾</Text>}
+                    </TouchableOpacity>
+
+                    {/* Field 2: Tipe Status (Akan Dijual vs Loan Out vs Loan In) */}
+                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>TETAPKAN STATUS PEMAIN:</Text>
+                    <View style={styles.tlTypeChoiceRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.tlTypeChoiceBtn,
+                          tlType === 'akan_dijual' && styles.tlTypeChoiceBtnActiveJual,
+                        ]}
+                        onPress={() => setTlType('akan_dijual')}>
+                        <Text
+                          style={[
+                            styles.tlTypeChoiceBtnText,
+                            tlType === 'akan_dijual' && styles.tlTypeChoiceBtnTextActiveJual,
+                          ]}>
+                          🔴 Rencana Jual
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.tlTypeChoiceBtn,
+                          tlType === 'loan_out' && styles.tlTypeChoiceBtnActiveLoanOut,
+                        ]}
+                        onPress={() => setTlType('loan_out')}>
+                        <Text
+                          style={[
+                            styles.tlTypeChoiceBtnText,
+                            tlType === 'loan_out' && styles.tlTypeChoiceBtnTextActiveLoanOut,
+                          ]}>
+                          🟡 Loan Out
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.tlTypeChoiceBtn,
+                          tlType === 'loan_in' && styles.tlTypeChoiceBtnActiveLoanIn,
+                        ]}
+                        onPress={() => setTlType('loan_in')}>
+                        <Text
+                          style={[
+                            styles.tlTypeChoiceBtnText,
+                            tlType === 'loan_in' && styles.tlTypeChoiceBtnTextActiveLoanIn,
+                          ]}>
+                          🟢 Loan In
+                        </Text>
+                      </TouchableOpacity>
                     </View>
-                    <Text style={styles.selectorTriggerText} numberOfLines={1}>
-                      {selectedTlPlayerObj
-                        ? `${selectedTlPlayerObj.nama} (${selectedTlPlayerObj.positions[0]?.nama ?? '-'})`
-                        : 'Pilih Pemain Skuad'}
-                    </Text>
-                  </View>
-                  {!tlEditPlayerTarget && <Text style={styles.selectorTriggerArrow}>PILIH ▾</Text>}
-                </TouchableOpacity>
 
-                {/* Field 2: Tipe Status (Akan Dijual vs Loan Out vs Loan In) */}
-                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>TETAPKAN STATUS PEMAIN:</Text>
-                <View style={styles.tlTypeChoiceRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.tlTypeChoiceBtn,
-                      tlType === 'akan_dijual' && styles.tlTypeChoiceBtnActiveJual,
-                    ]}
-                    onPress={() => setTlType('akan_dijual')}>
-                    <Text
-                      style={[
-                        styles.tlTypeChoiceBtnText,
-                        tlType === 'akan_dijual' && styles.tlTypeChoiceBtnTextActiveJual,
-                      ]}>
-                      🔴 Rencana Jual
-                    </Text>
-                  </TouchableOpacity>
+                    {/* If Loan Out or Loan In: Durasi & Opsi Beli */}
+                    {(tlType === 'loan_out' || tlType === 'loan_in') && (
+                      <View style={{ marginTop: 12 }}>
+                        <Text style={styles.fieldLabel}>DURASI PINJAMAN:</Text>
+                        <View style={styles.durasiRow}>
+                          {(['6_bulan', '1_tahun', '2_tahun'] as StatusDurasi[]).map((d) => {
+                            const isSel = tlDurasi === d;
+                            const label = d === '6_bulan' ? '6 Bulan' : d === '1_tahun' ? '1 Tahun' : '2 Tahun';
+                            return (
+                              <TouchableOpacity
+                                key={d}
+                                style={[styles.tlDurasiBtn, isSel && styles.tlDurasiBtnActive]}
+                                onPress={() => setTlDurasi(d)}>
+                                <Text style={[styles.tlDurasiBtnText, isSel && styles.tlDurasiBtnTextActive]}>
+                                  {label}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
 
-                  <TouchableOpacity
-                    style={[
-                      styles.tlTypeChoiceBtn,
-                      tlType === 'loan_out' && styles.tlTypeChoiceBtnActiveLoanOut,
-                    ]}
-                    onPress={() => setTlType('loan_out')}>
-                    <Text
-                      style={[
-                        styles.tlTypeChoiceBtnText,
-                        tlType === 'loan_out' && styles.tlTypeChoiceBtnTextActiveLoanOut,
-                      ]}>
-                      🟡 Loan Out
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.tlTypeChoiceBtn,
-                      tlType === 'loan_in' && styles.tlTypeChoiceBtnActiveLoanIn,
-                    ]}
-                    onPress={() => setTlType('loan_in')}>
-                    <Text
-                      style={[
-                        styles.tlTypeChoiceBtnText,
-                        tlType === 'loan_in' && styles.tlTypeChoiceBtnTextActiveLoanIn,
-                      ]}>
-                      🟢 Loan In
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* If Loan Out or Loan In: Durasi & Opsi Beli */}
-                {(tlType === 'loan_out' || tlType === 'loan_in') && (
-                  <View style={{ marginTop: 12 }}>
-                    <Text style={styles.fieldLabel}>DURASI PINJAMAN:</Text>
-                    <View style={styles.durasiRow}>
-                      {(['6_bulan', '1_tahun', '2_tahun'] as StatusDurasi[]).map((d) => {
-                        const isSel = tlDurasi === d;
-                        const label = d === '6_bulan' ? '6 Bulan' : d === '1_tahun' ? '1 Tahun' : '2 Tahun';
-                        return (
+                        {/* Opsi Pembelian Dropdown / Selector */}
+                        <Text style={[styles.fieldLabel, { marginTop: 12 }]}>OPSI PEMBELIAN (LOAN OPTION):</Text>
+                        <View style={styles.tlOpsiBeliRow}>
                           <TouchableOpacity
-                            key={d}
-                            style={[styles.tlDurasiBtn, isSel && styles.tlDurasiBtnActive]}
-                            onPress={() => setTlDurasi(d)}>
-                            <Text style={[styles.tlDurasiBtnText, isSel && styles.tlDurasiBtnTextActive]}>
-                              {label}
+                            style={[
+                              styles.tlOpsiBeliBtn,
+                              !tlIsOpsiBeli && styles.tlOpsiBeliBtnActive,
+                            ]}
+                            onPress={() => setTlIsOpsiBeli(false)}>
+                            <Text
+                              style={[
+                                styles.tlOpsiBeliBtnText,
+                                !tlIsOpsiBeli && styles.tlOpsiBeliBtnTextActive,
+                              ]}>
+                              🛡️ Pinjaman Murni (Tanpa Opsi Beli)
                             </Text>
                           </TouchableOpacity>
-                        );
-                      })}
-                    </View>
 
-                    {/* Opsi Pembelian Dropdown / Selector */}
-                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>OPSI PEMBELIAN (LOAN OPTION):</Text>
-                    <View style={styles.tlOpsiBeliRow}>
-                      <TouchableOpacity
-                        style={[
-                          styles.tlOpsiBeliBtn,
-                          !tlIsOpsiBeli && styles.tlOpsiBeliBtnActive,
-                        ]}
-                        onPress={() => setTlIsOpsiBeli(false)}>
-                        <Text
-                          style={[
-                            styles.tlOpsiBeliBtnText,
-                            !tlIsOpsiBeli && styles.tlOpsiBeliBtnTextActive,
-                          ]}>
-                          🛡️ Pinjaman Murni (Tanpa Opsi Beli)
-                        </Text>
-                      </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.tlOpsiBeliBtn,
+                              tlIsOpsiBeli && styles.tlOpsiBeliBtnActiveBuy,
+                            ]}
+                            onPress={() => setTlIsOpsiBeli(true)}>
+                            <Text
+                              style={[
+                                styles.tlOpsiBeliBtnText,
+                                tlIsOpsiBeli && styles.tlOpsiBeliBtnTextActiveBuy,
+                              ]}>
+                              🏷️ Pinjaman dengan Opsi Beli (Loan to Buy)
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
 
-                      <TouchableOpacity
-                        style={[
-                          styles.tlOpsiBeliBtn,
-                          tlIsOpsiBeli && styles.tlOpsiBeliBtnActiveBuy,
-                        ]}
-                        onPress={() => setTlIsOpsiBeli(true)}>
-                        <Text
-                          style={[
-                            styles.tlOpsiBeliBtnText,
-                            tlIsOpsiBeli && styles.tlOpsiBeliBtnTextActiveBuy,
-                          ]}>
-                          🏷️ Pinjaman dengan Opsi Beli (Loan to Buy)
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
+                    {/* Field 3: Catatan */}
+                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
+                      {tlType === 'akan_dijual'
+                        ? 'ALASAN PENJUALAN / TARGET KLUB PEMINAT:'
+                        : tlType === 'loan_in'
+                        ? 'KLUB ASAL / CATATAN PINJAMAN MASUK:'
+                        : 'CATATAN PINJAMAN KELUAR / KLUB TUJUAN:'}
+                    </Text>
+                    <TextInput
+                      style={[styles.modalInput, { height: 65, textAlignVertical: 'top' }]}
+                      placeholder={
+                        tlType === 'akan_dijual'
+                          ? 'misal: Surplus kuota sayap, butuh dana peremajaan bek'
+                          : tlType === 'loan_in'
+                          ? 'misal: Dipinjam dari Real Madrid dengan opsi tebus 40M'
+                          : 'misal: Dipinjamkan ke Girona untuk menit bermain tim utama'
+                      }
+                      placeholderTextColor="#999"
+                      value={tlCatatan}
+                      onChangeText={setTlCatatan}
+                      multiline
+                    />
+                  </ScrollView>
+
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={styles.modalCancelBtn}
+                      onPress={() => setShowAddTlModal(false)}>
+                      <Text style={styles.modalCancelText}>BATAL</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleSaveTransferLoan}>
+                      <Text style={styles.modalConfirmText}>SIMPAN STATUS</Text>
+                    </TouchableOpacity>
                   </View>
-                )}
+                </>
+              )}
 
-                {/* Field 3: Catatan */}
-                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
-                  {tlType === 'akan_dijual'
-                    ? 'ALASAN PENJUALAN / TARGET KLUB PEMINAT:'
-                    : tlType === 'loan_in'
-                    ? 'KLUB ASAL / CATATAN PINJAMAN MASUK:'
-                    : 'CATATAN PINJAMAN KELUAR / KLUB TUJUAN:'}
-                </Text>
-                <TextInput
-                  style={[styles.modalInput, { height: 65, textAlignVertical: 'top' }]}
-                  placeholder={
-                    tlType === 'akan_dijual'
-                      ? 'misal: Surplus kuota sayap, butuh dana peremajaan bek'
-                      : tlType === 'loan_in'
-                      ? 'misal: Dipinjam dari Real Madrid dengan opsi tebus 40M'
-                      : 'misal: Dipinjamkan ke Girona untuk menit bermain tim utama'
-                  }
-                  placeholderTextColor="#999"
-                  value={tlCatatan}
-                  onChangeText={setTlCatatan}
-                  multiline
-                />
-              </ScrollView>
+              {/* VIEW 2: PICK SQUAD PLAYER FOR TRANSFER/LOAN */}
+              {tlModalView === 'pick_player' && (
+                <>
+                  <View style={styles.filterModalHeader}>
+                    <Text style={styles.filterModalTitle}>PILIH PEMAIN DARI SKUAD</Text>
+                    <TouchableOpacity onPress={() => setTlModalView('form')} style={styles.modalCloseBtn}>
+                      <Text style={styles.modalCloseBtnText}>← KEMBALI</Text>
+                    </TouchableOpacity>
+                  </View>
 
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={styles.modalCancelBtn}
-                  onPress={() => setShowAddTlModal(false)}>
-                  <Text style={styles.modalCancelText}>BATAL</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleSaveTransferLoan}>
-                  <Text style={styles.modalConfirmText}>SIMPAN STATUS</Text>
-                </TouchableOpacity>
-              </View>
+                  <View style={[styles.wSearchRow, { marginHorizontal: 0, marginBottom: 10 }]}>
+                    <TextInput
+                      style={styles.wSearchInput}
+                      placeholder="🔍 Cari nama pemain atau posisi..."
+                      placeholderTextColor="#888"
+                      value={tlPlayerPickerSearch}
+                      onChangeText={setTlPlayerPickerSearch}
+                      autoFocus
+                    />
+                    {tlPlayerPickerSearch.length > 0 && (
+                      <TouchableOpacity
+                        onPress={() => setTlPlayerPickerSearch('')}
+                        style={styles.wSearchClearBtn}>
+                        <Text style={styles.wSearchClearText}>✕</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                    {availableSquadPlayersForTl.length === 0 ? (
+                      <View style={{ padding: 20, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, color: '#888' }}>Pemain tidak ditemukan</Text>
+                      </View>
+                    ) : (
+                      availableSquadPlayersForTl.map((p) => {
+                        const isSelected = tlSelectedPlayerId === p.id;
+                        const primaryPos = p.positions[0]?.nama ?? '-';
+
+                        return (
+                          <TouchableOpacity
+                            key={p.id}
+                            style={[
+                              styles.playerPickerItem,
+                              isSelected && styles.playerPickerItemActive,
+                            ]}
+                            onPress={() => {
+                              setTlSelectedPlayerId(p.id);
+                              setTlModalView('form');
+                            }}>
+                            <View style={styles.playerPickerItemLeft}>
+                              <View style={styles.playerPickerOvrBadge}>
+                                <Text style={styles.playerPickerOvrText}>{p.ovr_current}</Text>
+                                <Text style={styles.playerPickerPosText}>{primaryPos}</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={[
+                                    styles.playerPickerName,
+                                    isSelected && styles.playerPickerNameActive,
+                                  ]}>
+                                  {p.nama}
+                                </Text>
+                                <Text style={styles.playerPickerSub}>
+                                  Posisi: {p.positions.map((pos) => pos.nama).join(', ')} • Status: {p.status.toUpperCase()}
+                                </Text>
+                              </View>
+                            </View>
+                            {isSelected && <Text style={styles.playerPickerCheck}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
+                  </ScrollView>
+
+                  <TouchableOpacity
+                    style={styles.modalBottomBtn}
+                    onPress={() => setTlModalView('form')}>
+                    <Text style={styles.modalBottomBtnText}>BATAL</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </Pressable>
           </KeyboardAvoidingView>
         </Pressable>
@@ -2408,344 +2750,6 @@ export default function MoreMenuScreen() {
                 setShowWFilterPosModal(false);
                 setShowTlFilterPosModal(false);
               }}>
-              <Text style={styles.modalBottomBtnText}>TUTUP</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* ─── POSITION PICKER MODAL FOR WATCHLIST FORM ── */}
-      <Modal
-        visible={showPosPickerModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowPosPickerModal(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowPosPickerModal(false)}>
-          <View style={styles.filterModalCard} onStartShouldSetResponder={() => true}>
-            <View style={styles.filterModalHeader}>
-              <Text style={styles.filterModalTitle}>PILIH POSISI TARGET TRANSFER</Text>
-              <TouchableOpacity onPress={() => setShowPosPickerModal(false)} style={styles.modalCloseBtn}>
-                <Text style={styles.modalCloseBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              {/* Kiper */}
-              {gkPositions.length > 0 && (
-                <View style={styles.posCategorySection}>
-                  <Text style={styles.posCategoryHeader}>🧤 PENJAGA GAWANG</Text>
-                  <View style={styles.posCategoryGrid}>
-                    {gkPositions.map((pos) => (
-                      <TouchableOpacity
-                        key={pos.id}
-                        style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
-                        onPress={() => {
-                          setWPosId(pos.id);
-                          setShowPosPickerModal(false);
-                        }}>
-                        <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
-                          {pos.nama}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Bek */}
-              {defPositions.length > 0 && (
-                <View style={styles.posCategorySection}>
-                  <Text style={styles.posCategoryHeader}>🛡️ BEK (DEFENDER)</Text>
-                  <View style={styles.posCategoryGrid}>
-                    {defPositions.map((pos) => (
-                      <TouchableOpacity
-                        key={pos.id}
-                        style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
-                        onPress={() => {
-                          setWPosId(pos.id);
-                          setShowPosPickerModal(false);
-                        }}>
-                        <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
-                          {pos.nama}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Gelandang */}
-              {midPositions.length > 0 && (
-                <View style={styles.posCategorySection}>
-                  <Text style={styles.posCategoryHeader}>⚙️ GELANDANG (MIDFIELDER)</Text>
-                  <View style={styles.posCategoryGrid}>
-                    {midPositions.map((pos) => (
-                      <TouchableOpacity
-                        key={pos.id}
-                        style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
-                        onPress={() => {
-                          setWPosId(pos.id);
-                          setShowPosPickerModal(false);
-                        }}>
-                        <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
-                          {pos.nama}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Penyerang */}
-              {attPositions.length > 0 && (
-                <View style={styles.posCategorySection}>
-                  <Text style={styles.posCategoryHeader}>⚡ PENYERANG (ATTACKER)</Text>
-                  <View style={styles.posCategoryGrid}>
-                    {attPositions.map((pos) => (
-                      <TouchableOpacity
-                        key={pos.id}
-                        style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
-                        onPress={() => {
-                          setWPosId(pos.id);
-                          setShowPosPickerModal(false);
-                        }}>
-                        <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
-                          {pos.nama}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Lainnya */}
-              {otherPositions.length > 0 && (
-                <View style={styles.posCategorySection}>
-                  <Text style={styles.posCategoryHeader}>LAINNYA</Text>
-                  <View style={styles.posCategoryGrid}>
-                    {otherPositions.map((pos) => (
-                      <TouchableOpacity
-                        key={pos.id}
-                        style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
-                        onPress={() => {
-                          setWPosId(pos.id);
-                          setShowPosPickerModal(false);
-                        }}>
-                        <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
-                          {pos.nama}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-            </ScrollView>
-
-            <TouchableOpacity
-              style={styles.modalBottomBtn}
-              onPress={() => setShowPosPickerModal(false)}>
-              <Text style={styles.modalBottomBtnText}>TUTUP</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* ─── PLAYER REPLACEMENT PICKER MODAL (WATCHLIST) ─ */}
-      <Modal
-        visible={showPlayerPickerModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowPlayerPickerModal(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowPlayerPickerModal(false)}>
-          <View style={styles.filterModalCard} onStartShouldSetResponder={() => true}>
-            <View style={styles.filterModalHeader}>
-              <Text style={styles.filterModalTitle}>PILIH PEMAIN YANG AKAN DIGANTIKAN</Text>
-              <TouchableOpacity onPress={() => setShowPlayerPickerModal(false)} style={styles.modalCloseBtn}>
-                <Text style={styles.modalCloseBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.wSearchRow, { marginHorizontal: 0, marginBottom: 10 }]}>
-              <TextInput
-                style={styles.wSearchInput}
-                placeholder="🔍 Cari pemain berdasarkan nama/posisi..."
-                placeholderTextColor="#888"
-                value={playerPickerSearch}
-                onChangeText={setPlayerPickerSearch}
-              />
-              {playerPickerSearch.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => setPlayerPickerSearch('')}
-                  style={styles.wSearchClearBtn}>
-                  <Text style={styles.wSearchClearText}>✕</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-              {/* Option: Tanpa Pengganti */}
-              <TouchableOpacity
-                style={[
-                  styles.playerPickerItem,
-                  wTerkaitPlayerId === null && styles.playerPickerItemActive,
-                ]}
-                onPress={() => {
-                  setWTerkaitPlayerId(null);
-                  setShowPlayerPickerModal(false);
-                }}>
-                <View style={styles.playerPickerItemLeft}>
-                  <View style={[styles.playerPickerOvrBadge, { backgroundColor: '#666' }]}>
-                    <Text style={styles.playerPickerOvrText}>-</Text>
-                  </View>
-                  <View>
-                    <Text
-                      style={[
-                        styles.playerPickerName,
-                        wTerkaitPlayerId === null && styles.playerPickerNameActive,
-                      ]}>
-                      Tanpa Pengganti
-                    </Text>
-                    <Text style={styles.playerPickerSub}>
-                      Target transfer ini sebagai tambahan skuad baru
-                    </Text>
-                  </View>
-                </View>
-                {wTerkaitPlayerId === null && <Text style={styles.playerPickerCheck}>✓</Text>}
-              </TouchableOpacity>
-
-              {/* List of squad players */}
-              {pickerFilteredPlayers.map((p) => {
-                const isSelected = wTerkaitPlayerId === p.id;
-                const primaryPos = p.positions[0]?.nama ?? '-';
-                const isAkanDijual = p.status === 'akan_dijual';
-
-                return (
-                  <TouchableOpacity
-                    key={p.id}
-                    style={[
-                      styles.playerPickerItem,
-                      isSelected && styles.playerPickerItemActive,
-                      isAkanDijual && styles.playerPickerItemRecommended,
-                    ]}
-                    onPress={() => {
-                      setWTerkaitPlayerId(p.id);
-                      setShowPlayerPickerModal(false);
-                    }}>
-                    <View style={styles.playerPickerItemLeft}>
-                      <View style={styles.playerPickerOvrBadge}>
-                        <Text style={styles.playerPickerOvrText}>{p.ovr_current}</Text>
-                        <Text style={styles.playerPickerPosText}>{primaryPos}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text
-                            style={[
-                              styles.playerPickerName,
-                              isSelected && styles.playerPickerNameActive,
-                            ]}>
-                            {p.nama}
-                          </Text>
-                          {isAkanDijual && (
-                            <View style={styles.akanDijualTag}>
-                              <Text style={styles.akanDijualTagText}>AKAN DIJUAL</Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={styles.playerPickerSub}>
-                          Posisi: {p.positions.map((pos) => pos.nama).join(', ')} • Status: {p.status.toUpperCase()}
-                        </Text>
-                      </View>
-                    </View>
-                    {isSelected && <Text style={styles.playerPickerCheck}>✓</Text>}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <TouchableOpacity
-              style={styles.modalBottomBtn}
-              onPress={() => setShowPlayerPickerModal(false)}>
-              <Text style={styles.modalBottomBtnText}>TUTUP</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* ─── SQUAD PLAYER PICKER MODAL FOR TRANSFER & LOAN ─ */}
-      <Modal
-        visible={showTlPlayerPickerModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowTlPlayerPickerModal(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowTlPlayerPickerModal(false)}>
-          <View style={styles.filterModalCard} onStartShouldSetResponder={() => true}>
-            <View style={styles.filterModalHeader}>
-              <Text style={styles.filterModalTitle}>PILIH PEMAIN SKUAD</Text>
-              <TouchableOpacity onPress={() => setShowTlPlayerPickerModal(false)} style={styles.modalCloseBtn}>
-                <Text style={styles.modalCloseBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.wSearchRow, { marginHorizontal: 0, marginBottom: 10 }]}>
-              <TextInput
-                style={styles.wSearchInput}
-                placeholder="🔍 Cari nama pemain atau posisi..."
-                placeholderTextColor="#888"
-                value={tlPlayerPickerSearch}
-                onChangeText={setTlPlayerPickerSearch}
-              />
-              {tlPlayerPickerSearch.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => setTlPlayerPickerSearch('')}
-                  style={styles.wSearchClearBtn}>
-                  <Text style={styles.wSearchClearText}>✕</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-              {availableSquadPlayersForTl.map((p) => {
-                const isSelected = tlSelectedPlayerId === p.id;
-                const primaryPos = p.positions[0]?.nama ?? '-';
-
-                return (
-                  <TouchableOpacity
-                    key={p.id}
-                    style={[
-                      styles.playerPickerItem,
-                      isSelected && styles.playerPickerItemActive,
-                    ]}
-                    onPress={() => {
-                      setTlSelectedPlayerId(p.id);
-                      setShowTlPlayerPickerModal(false);
-                    }}>
-                    <View style={styles.playerPickerItemLeft}>
-                      <View style={styles.playerPickerOvrBadge}>
-                        <Text style={styles.playerPickerOvrText}>{p.ovr_current}</Text>
-                        <Text style={styles.playerPickerPosText}>{primaryPos}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[
-                            styles.playerPickerName,
-                            isSelected && styles.playerPickerNameActive,
-                          ]}>
-                          {p.nama}
-                        </Text>
-                        <Text style={styles.playerPickerSub}>
-                          Posisi: {p.positions.map((pos) => pos.nama).join(', ')} • Status: {p.status.toUpperCase()}
-                        </Text>
-                      </View>
-                    </View>
-                    {isSelected && <Text style={styles.playerPickerCheck}>✓</Text>}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <TouchableOpacity
-              style={styles.modalBottomBtn}
-              onPress={() => setShowTlPlayerPickerModal(false)}>
               <Text style={styles.modalBottomBtnText}>TUTUP</Text>
             </TouchableOpacity>
           </View>
@@ -3594,6 +3598,11 @@ const styles = StyleSheet.create({
   tlTypeChoiceBtnTextActiveLoanIn: {
     color: '#FFF',
   },
+  tlDurasiRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 6,
+  },
   tlDurasiBtn: {
     flex: 1,
     paddingVertical: 8,
@@ -3807,9 +3816,9 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   modalCloseBtnText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '900',
-    color: '#000',
+    color: '#0A1128',
   },
   posGroupAllBtn: {
     backgroundColor: '#F0F0F0',
