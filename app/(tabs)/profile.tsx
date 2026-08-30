@@ -28,9 +28,9 @@ import {
 } from '@/src/services/watchlistService';
 import { listPositions } from '@/src/services/positionService';
 import { listPlayers, updatePlayer, deletePlayer } from '@/src/services/playerService';
-import type { Profile, Position, PlayerWithPositions } from '@/src/types';
+import type { Profile, Position, PlayerWithPositions, StatusDurasi, PlayerStatus } from '@/src/types';
 
-type MenuTab = 'profiles' | 'watchlist' | 'sold_players' | 'backup' | 'about';
+type MenuTab = 'profiles' | 'watchlist' | 'transfer_loan' | 'sold_players' | 'backup' | 'about';
 
 export default function MoreMenuScreen() {
   const {
@@ -85,10 +85,27 @@ export default function MoreMenuScreen() {
   const [wCatatan, setWCatatan] = useState('');
   const [wTerkaitPlayerId, setWTerkaitPlayerId] = useState<string | null>(null);
 
-  // Pickers Modals inside Watchlist Form (No more horizontal scrolling)
+  // Pickers Modals inside Watchlist Form
   const [showPosPickerModal, setShowPosPickerModal] = useState(false);
   const [showPlayerPickerModal, setShowPlayerPickerModal] = useState(false);
   const [playerPickerSearch, setPlayerPickerSearch] = useState('');
+
+  // ─── Transfer & Loan List State ───────────────────
+  const [tlSubTab, setTlSubTab] = useState<'jual' | 'loan'>('jual');
+  const [tlSearchQuery, setTlSearchQuery] = useState('');
+  const [tlFilterPos, setTlFilterPos] = useState('ALL');
+  const [showTlFilterPosModal, setShowTlFilterPosModal] = useState(false);
+
+  // Transfer & Loan Add/Edit Modal State
+  const [showAddTlModal, setShowAddTlModal] = useState(false);
+  const [tlEditPlayerTarget, setTlEditPlayerTarget] = useState<PlayerWithPositions | null>(null);
+  const [tlSelectedPlayerId, setTlSelectedPlayerId] = useState<string | null>(null);
+  const [tlType, setTlType] = useState<'akan_dijual' | 'loan_out'>('akan_dijual');
+  const [tlDurasi, setTlDurasi] = useState<StatusDurasi>('1_tahun');
+  const [tlIsOpsiBeli, setTlIsOpsiBeli] = useState(false);
+  const [tlCatatan, setTlCatatan] = useState('');
+  const [showTlPlayerPickerModal, setShowTlPlayerPickerModal] = useState(false);
+  const [tlPlayerPickerSearch, setTlPlayerPickerSearch] = useState('');
 
   const loadData = useCallback(async () => {
     if (!activeProfile) return;
@@ -113,10 +130,10 @@ export default function MoreMenuScreen() {
     loadData();
   }, [loadData]);
 
-  // Derived sold players
-  const soldPlayers = useMemo(() => {
-    return players.filter((p) => p.status === 'sudah_dijual');
-  }, [players]);
+  // Derived collections
+  const soldPlayers = useMemo(() => players.filter((p) => p.status === 'sudah_dijual'), [players]);
+  const akanDijualPlayers = useMemo(() => players.filter((p) => p.status === 'akan_dijual'), [players]);
+  const loanPlayers = useMemo(() => players.filter((p) => p.status === 'loan_out'), [players]);
 
   // Categorized Positions for Modals
   const gkPositions = useMemo(() => positions.filter((p) => p.nama.toUpperCase() === 'GK'), [positions]);
@@ -160,12 +177,49 @@ export default function MoreMenuScreen() {
     });
   }, [watchlist, wFilterPos, wSearchQuery]);
 
+  // Filtered Transfer & Loan List
+  const filteredAkanDijual = useMemo(() => {
+    return akanDijualPlayers.filter((p) => {
+      if (tlFilterPos !== 'ALL') {
+        const hasPos = p.positions.some((pos) => pos.id === tlFilterPos);
+        if (!hasPos) return false;
+      }
+      if (tlSearchQuery.trim()) {
+        const q = tlSearchQuery.toLowerCase();
+        const matchName = p.nama.toLowerCase().includes(q);
+        const matchPos = p.positions.some((pos) => pos.nama.toLowerCase().includes(q));
+        const matchNote = p.status_catatan?.toLowerCase().includes(q);
+        if (!matchName && !matchPos && !matchNote) return false;
+      }
+      return true;
+    });
+  }, [akanDijualPlayers, tlFilterPos, tlSearchQuery]);
+
+  const filteredLoanPlayers = useMemo(() => {
+    return loanPlayers.filter((p) => {
+      if (tlFilterPos !== 'ALL') {
+        const hasPos = p.positions.some((pos) => pos.id === tlFilterPos);
+        if (!hasPos) return false;
+      }
+      if (tlSearchQuery.trim()) {
+        const q = tlSearchQuery.toLowerCase();
+        const matchName = p.nama.toLowerCase().includes(q);
+        const matchPos = p.positions.some((pos) => pos.nama.toLowerCase().includes(q));
+        const matchNote = p.status_catatan?.toLowerCase().includes(q);
+        if (!matchName && !matchPos && !matchNote) return false;
+      }
+      return true;
+    });
+  }, [loanPlayers, tlFilterPos, tlSearchQuery]);
+
   // Selected details for Form Display
   const selectedFormPos = positions.find((p) => p.id === wPosId);
   const selectedFormPlayer = players.find((p) => p.id === wTerkaitPlayerId);
   const selectedFilterPosObj = positions.find((p) => p.id === wFilterPos);
+  const selectedTlFilterPosObj = positions.find((p) => p.id === tlFilterPos);
+  const selectedTlPlayerObj = players.find((p) => p.id === tlSelectedPlayerId);
 
-  // Filtered players inside Player Replacement Picker Modal
+  // Filtered players inside Replacement Picker Modal (for Watchlist Form)
   const pickerFilteredPlayers = useMemo(() => {
     return players
       .filter((p) => p.status !== 'sudah_dijual')
@@ -178,12 +232,26 @@ export default function MoreMenuScreen() {
         );
       })
       .sort((a, b) => {
-        // Show 'akan_dijual' first as recommendation
         if (a.status === 'akan_dijual' && b.status !== 'akan_dijual') return -1;
         if (b.status === 'akan_dijual' && a.status !== 'akan_dijual') return 1;
         return b.ovr_current - a.ovr_current;
       });
   }, [players, playerPickerSearch]);
+
+  // Available players to add into Transfer / Loan List (Active players)
+  const availableSquadPlayersForTl = useMemo(() => {
+    return players
+      .filter((p) => p.status !== 'sudah_dijual')
+      .filter((p) => {
+        if (!tlPlayerPickerSearch.trim()) return true;
+        const q = tlPlayerPickerSearch.toLowerCase();
+        return (
+          p.nama.toLowerCase().includes(q) ||
+          p.positions.some((pos) => pos.nama.toLowerCase().includes(q))
+        );
+      })
+      .sort((a, b) => b.ovr_current - a.ovr_current);
+  }, [players, tlPlayerPickerSearch]);
 
   if (profileLoading) {
     return (
@@ -300,14 +368,14 @@ export default function MoreMenuScreen() {
   }
 
   // ─── Watchlist Handlers ───────────────────────────
-  function openAddWatchlist() {
+  function openAddWatchlist(presetPlayer?: PlayerWithPositions) {
     setWatchEditTarget(null);
     setWNamaTarget('');
-    setWPosId(positions[0]?.id ?? '');
+    setWPosId(presetPlayer ? presetPlayer.positions[0]?.id ?? positions[0]?.id : positions[0]?.id ?? '');
     setWOvrMin('78');
     setWOvrMax('83');
-    setWCatatan('');
-    setWTerkaitPlayerId(null);
+    setWCatatan(presetPlayer ? `Pengganti ${presetPlayer.nama} yang akan dilepas` : '');
+    setWTerkaitPlayerId(presetPlayer ? presetPlayer.id : null);
     setShowWatchModal(true);
   }
 
@@ -387,6 +455,155 @@ export default function MoreMenuScreen() {
     );
   }
 
+  // ─── Transfer & Loan Handlers ─────────────────────
+  function openAddTransferLoan() {
+    setTlEditPlayerTarget(null);
+    setTlSelectedPlayerId(players.find((p) => p.status === 'aktif')?.id ?? null);
+    setTlType(tlSubTab === 'loan' ? 'loan_out' : 'akan_dijual');
+    setTlDurasi('1_tahun');
+    setTlIsOpsiBeli(false);
+    setTlCatatan('');
+    setShowAddTlModal(true);
+  }
+
+  function openEditTransferLoan(player: PlayerWithPositions) {
+    setTlEditPlayerTarget(player);
+    setTlSelectedPlayerId(player.id);
+    setTlType(player.status === 'loan_out' ? 'loan_out' : 'akan_dijual');
+    setTlDurasi(player.status_durasi ?? '1_tahun');
+    const hasOpsiBeli = player.status_catatan?.includes('[OPSI BELI]') ?? false;
+    setTlIsOpsiBeli(hasOpsiBeli);
+    const cleanNote = (player.status_catatan ?? '').replace('[OPSI BELI] ', '').replace('[OPSI BELI]', '');
+    setTlCatatan(cleanNote);
+    setShowAddTlModal(true);
+  }
+
+  async function handleSaveTransferLoan() {
+    if (!tlSelectedPlayerId) {
+      Alert.alert('Error', 'Pilih pemain skuad terlebih dahulu');
+      return;
+    }
+    const targetPlayer = players.find((p) => p.id === tlSelectedPlayerId);
+    if (!targetPlayer) return;
+
+    let finalNote = tlCatatan.trim();
+    if (tlType === 'loan_out' && tlIsOpsiBeli) {
+      finalNote = finalNote ? `[OPSI BELI] ${finalNote}` : '[OPSI BELI] Pinjaman dengan opsi beli permanen';
+    }
+
+    try {
+      await updatePlayer(targetPlayer.id, {
+        nama: targetPlayer.nama,
+        ovr_current: targetPlayer.ovr_current,
+        status: tlType,
+        status_durasi: tlType === 'loan_out' ? tlDurasi : null,
+        status_mulai: new Date().toISOString(),
+        status_catatan: finalNote || null,
+        position_ids: targetPlayer.positions.map((p) => p.id),
+      });
+
+      setShowAddTlModal(false);
+      loadData();
+      Alert.alert(
+        'Sukses 🎉',
+        `Pemain "${targetPlayer.nama}" berhasil ditetapkan ke ${
+          tlType === 'loan_out' ? 'Daftar Pinjaman' : 'Rencana Jual'
+        }.`
+      );
+    } catch (e) {
+      Alert.alert('Error', 'Gagal menyimpan status transfer/loan pemain');
+    }
+  }
+
+  function handleMarkAsSold(player: PlayerWithPositions) {
+    Alert.alert(
+      'Konfirmasi Penjualan',
+      `Tandai "${player.nama}" sebagai SUDAH TERJUAL?\n\nPemain akan dipindahkan ke Arsip Pemain Terjual dan total kuota skuad klub di dashboard otomatis berkurang.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Ya, Sudah Terjual',
+          onPress: async () => {
+            try {
+              await updatePlayer(player.id, {
+                nama: player.nama,
+                ovr_current: player.ovr_current,
+                status: 'sudah_dijual',
+                status_durasi: null,
+                status_mulai: new Date().toISOString(),
+                status_catatan: player.status_catatan ? `[Terjual] ${player.status_catatan}` : 'Pemain resmi dilepas/terjual',
+                position_ids: player.positions.map((p) => p.id),
+              });
+              loadData();
+              Alert.alert('Sukses 🎉', `Pemain "${player.nama}" kini berstatus SUDAH DIJUAL.`);
+            } catch (e) {
+              Alert.alert('Error', 'Gagal memperbarui status pemain');
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  function handleCancelSell(player: PlayerWithPositions) {
+    Alert.alert(
+      'Batalkan Rencana Jual',
+      `Kembalikan "${player.nama}" menjadi pemain AKTIF di skuad?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Kembalikan ke Skuad',
+          onPress: async () => {
+            try {
+              await updatePlayer(player.id, {
+                nama: player.nama,
+                ovr_current: player.ovr_current,
+                status: 'aktif',
+                status_durasi: null,
+                status_mulai: null,
+                status_catatan: null,
+                position_ids: player.positions.map((p) => p.id),
+              });
+              loadData();
+            } catch (e) {
+              Alert.alert('Error', 'Gagal membatalkan rencana jual');
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  function handleRecallLoan(player: PlayerWithPositions) {
+    Alert.alert(
+      'Recall dari Pinjaman',
+      `Tarik kembali "${player.nama}" ke skuad utama?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Recall ke Skuad',
+          onPress: async () => {
+            try {
+              await updatePlayer(player.id, {
+                nama: player.nama,
+                ovr_current: player.ovr_current,
+                status: 'aktif',
+                status_durasi: null,
+                status_mulai: null,
+                status_catatan: null,
+                position_ids: player.positions.map((p) => p.id),
+              });
+              loadData();
+              Alert.alert('Sukses 🎉', `Pemain "${player.nama}" kini kembali aktif di skuad utama.`);
+            } catch (e) {
+              Alert.alert('Error', 'Gagal menarik pemain dari pinjaman');
+            }
+          },
+        },
+      ]
+    );
+  }
+
   // ─── Sold Players Handlers ────────────────────────
   async function handleRevertSoldPlayer(player: PlayerWithPositions) {
     Alert.alert(
@@ -451,7 +668,7 @@ export default function MoreMenuScreen() {
           <View style={styles.menuHubHeader}>
             <Text style={styles.menuHubTitle}>MENU & LAINNYA</Text>
             <Text style={styles.menuHubSubtitle}>
-              Pusat konfigurasi, target transfer, arsip pemain terjual, backup data, dan informasi pengembang.
+              Pusat konfigurasi, transfer target & rencana keluar, arsip pemain terjual, backup data, dan informasi pengembang.
             </Text>
             {activeProfile && (
               <View style={styles.activeSaveBadgeRow}>
@@ -504,14 +721,40 @@ export default function MoreMenuScreen() {
                     </View>
                   </View>
                   <Text style={styles.menuCardDesc}>
-                    Catat nama pemain incaran, posisi target, target range OVR, dan pengganti pemain.
+                    Catat nama pemain incaran luar klub, posisi target, range OVR, dan pengganti.
                   </Text>
                 </View>
               </View>
               <Text style={styles.menuArrow}>➔</Text>
             </TouchableOpacity>
 
-            {/* 3. Pemain Terjual (Arsip Penjualan) */}
+            {/* 3. Transfer & Loan List (NEW) */}
+            <TouchableOpacity
+              style={styles.verticalMenuCard}
+              onPress={() => setActiveMenu('transfer_loan')}
+              activeOpacity={0.8}>
+              <View style={styles.menuCardLeft}>
+                <View style={[styles.menuIconBox, { backgroundColor: '#C5221F' }]}>
+                  <Text style={styles.menuIconText}>📤</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.menuCardTitleRow}>
+                    <Text style={styles.menuCardTitle}>TRANSFER & LOAN LIST</Text>
+                    <View style={[styles.menuCountBadge, { backgroundColor: '#C5221F' }]}>
+                      <Text style={[styles.menuCountText, { color: '#FFF' }]}>
+                        {akanDijualPlayers.length + loanPlayers.length} Pemain
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.menuCardDesc}>
+                    Rencana jual pemain skuad & daftar pemain yang dipinjamkan (6 bln, 1 thn, 2 thn, opsi beli).
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.menuArrow}>➔</Text>
+            </TouchableOpacity>
+
+            {/* 4. Pemain Terjual (Arsip Penjualan) */}
             <TouchableOpacity
               style={styles.verticalMenuCard}
               onPress={() => setActiveMenu('sold_players')}
@@ -537,7 +780,7 @@ export default function MoreMenuScreen() {
               <Text style={styles.menuArrow}>➔</Text>
             </TouchableOpacity>
 
-            {/* 4. Backup & Ekspor */}
+            {/* 5. Backup & Ekspor */}
             <TouchableOpacity
               style={styles.verticalMenuCard}
               onPress={() => setActiveMenu('backup')}
@@ -561,7 +804,7 @@ export default function MoreMenuScreen() {
               <Text style={styles.menuArrow}>➔</Text>
             </TouchableOpacity>
 
-            {/* 5. Tentang & Dev */}
+            {/* 6. Tentang & Dev */}
             <TouchableOpacity
               style={styles.verticalMenuCard}
               onPress={() => setActiveMenu('about')}
@@ -600,6 +843,7 @@ export default function MoreMenuScreen() {
             <Text style={styles.subScreenTitle}>
               {activeMenu === 'profiles' && '📁 PROFIL & SAVE'}
               {activeMenu === 'watchlist' && '🎯 TRANSFER WATCHLIST'}
+              {activeMenu === 'transfer_loan' && '📤 TRANSFER & LOAN LIST'}
               {activeMenu === 'sold_players' && '🏷️ PEMAIN TERJUAL'}
               {activeMenu === 'backup' && '💾 BACKUP & RESTORE'}
               {activeMenu === 'about' && 'ℹ️ TENTANG & DEVELOPER'}
@@ -714,7 +958,7 @@ export default function MoreMenuScreen() {
                   {/* Add Target Button */}
                   <TouchableOpacity
                     style={styles.wAddTargetBtn}
-                    onPress={openAddWatchlist}
+                    onPress={() => openAddWatchlist()}
                     activeOpacity={0.8}>
                     <Text style={styles.wAddTargetBtnText}>+ TAMBAH TARGET</Text>
                   </TouchableOpacity>
@@ -858,7 +1102,350 @@ export default function MoreMenuScreen() {
             </View>
           )}
 
-          {/* ─── 3. PEMAIN TERJUAL SECTION ─────────────── */}
+          {/* ─── 3. TRANSFER & LOAN LIST SECTION (NEW) ─── */}
+          {activeMenu === 'transfer_loan' && (
+            <View style={{ flex: 1 }}>
+              {/* Segmented Switcher (Rencana Jual vs Daftar Pinjaman) */}
+              <View style={styles.tlSegmentBar}>
+                <TouchableOpacity
+                  style={[styles.tlSegmentBtn, tlSubTab === 'jual' && styles.tlSegmentBtnActiveJual]}
+                  onPress={() => setTlSubTab('jual')}>
+                  <Text
+                    style={[
+                      styles.tlSegmentBtnText,
+                      tlSubTab === 'jual' && styles.tlSegmentBtnTextActiveJual,
+                    ]}>
+                    🔴 RENCANA JUAL ({akanDijualPlayers.length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.tlSegmentBtn, tlSubTab === 'loan' && styles.tlSegmentBtnActiveLoan]}
+                  onPress={() => setTlSubTab('loan')}>
+                  <Text
+                    style={[
+                      styles.tlSegmentBtnText,
+                      tlSubTab === 'loan' && styles.tlSegmentBtnTextActiveLoan,
+                    ]}>
+                    🟡 DAFTAR LOAN ({loanPlayers.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Filter & Search Bar */}
+              <View style={styles.wFilterContainer}>
+                {/* Search Bar */}
+                <View style={styles.wSearchRow}>
+                  <TextInput
+                    style={styles.wSearchInput}
+                    placeholder="🔍 Cari nama pemain, posisi, catatan..."
+                    placeholderTextColor="#888"
+                    value={tlSearchQuery}
+                    onChangeText={setTlSearchQuery}
+                    returnKeyType="search"
+                  />
+                  {tlSearchQuery.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setTlSearchQuery('')}
+                      style={styles.wSearchClearBtn}>
+                      <Text style={styles.wSearchClearText}>✕</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Filter & Add Button Row */}
+                <View style={styles.wFilterActionRow}>
+                  {/* Position Filter Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.wFilterBigBtn,
+                      tlFilterPos !== 'ALL' && styles.wFilterBigBtnActive,
+                    ]}
+                    onPress={() => setShowTlFilterPosModal(true)}
+                    activeOpacity={0.8}>
+                    <Text
+                      style={[
+                        styles.wFilterBigBtnText,
+                        tlFilterPos !== 'ALL' && styles.wFilterBigBtnTextActive,
+                      ]}
+                      numberOfLines={1}>
+                      📍 POSISI: {tlFilterPos === 'ALL' ? 'SEMUA' : selectedTlFilterPosObj?.nama ?? 'POSISI'} ▾
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Add Player to Sell/Loan Button */}
+                  <TouchableOpacity
+                    style={styles.wAddTargetBtn}
+                    onPress={openAddTransferLoan}
+                    activeOpacity={0.8}>
+                    <Text style={styles.wAddTargetBtnText}>+ TAMBAH PEMAIN</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Active Filter Tags */}
+                {(tlFilterPos !== 'ALL' || tlSearchQuery.trim() !== '') && (
+                  <View style={styles.wActiveTagsRow}>
+                    <Text style={styles.wActiveTagHeader}>FILTER AKTIF:</Text>
+                    {tlFilterPos !== 'ALL' && (
+                      <TouchableOpacity
+                        style={styles.wActiveTagChip}
+                        onPress={() => setTlFilterPos('ALL')}>
+                        <Text style={styles.wActiveTagChipText}>
+                          POSISI: {selectedTlFilterPosObj?.nama ?? tlFilterPos} ✕
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {tlSearchQuery.trim() !== '' && (
+                      <TouchableOpacity
+                        style={styles.wActiveTagChip}
+                        onPress={() => setTlSearchQuery('')}>
+                        <Text style={styles.wActiveTagChipText}>
+                          "{tlSearchQuery}" ✕
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={styles.wResetFilterChip}
+                      onPress={() => {
+                        setTlFilterPos('ALL');
+                        setTlSearchQuery('');
+                      }}>
+                      <Text style={styles.wResetFilterChipText}>RESET</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+              {/* ─── SUB-TAB 1: RENCANA JUAL ─────────────── */}
+              {tlSubTab === 'jual' && (
+                <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+                  {filteredAkanDijual.length === 0 ? (
+                    <View style={styles.emptyCard}>
+                      <Text style={styles.emptyTitle}>
+                        {akanDijualPlayers.length === 0 ? 'Belum Ada Pemain Akan Dijual' : 'Pemain Tidak Ditemukan'}
+                      </Text>
+                      <Text style={styles.emptySub}>
+                        {akanDijualPlayers.length === 0
+                          ? 'Gunakan tombol "+ TAMBAH PEMAIN" di atas untuk menandai pemain skuad yang ingin dijual.'
+                          : 'Coba ganti filter posisi atau kata kunci pencarian.'}
+                      </Text>
+                    </View>
+                  ) : (
+                    filteredAkanDijual.map((player) => {
+                      const primaryPos = player.positions[0]?.nama ?? '-';
+                      const secondaryPos = player.positions.slice(1).map((p) => p.nama).join(', ');
+
+                      // Find ALL matching Watchlist targets for this player or player's positions
+                      const matchingTargets = watchlist.filter(
+                        (w) =>
+                          w.terkait_player_id === player.id ||
+                          player.positions.some((pos) => pos.id === w.position_id)
+                      );
+
+                      return (
+                        <View key={player.id} style={styles.tlSellCard}>
+                          {/* Top: Player Name & OVR */}
+                          <View style={styles.watchCardTop}>
+                            <View style={[styles.watchPosBadge, { backgroundColor: '#B06000' }]}>
+                              <Text style={[styles.watchPosBadgeText, { color: '#FFF' }]}>{primaryPos}</Text>
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 12 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={styles.watchPlayerNameHeader}>{player.nama}</Text>
+                                <View style={styles.akanDijualTag}>
+                                  <Text style={styles.akanDijualTagText}>AKAN DIJUAL</Text>
+                                </View>
+                              </View>
+                              <Text style={styles.tlPlayerSub}>
+                                OVR: {player.ovr_current} • Posisi: {player.positions.map((p) => p.nama).join(', ')}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Reason / Notes */}
+                          {player.status_catatan && (
+                            <View style={styles.watchNoteBox}>
+                              <Text style={styles.watchNoteLabel}>📝 Alasan / Catatan Penjualan:</Text>
+                              <Text style={styles.watchNoteText}>"{player.status_catatan}"</Text>
+                            </View>
+                          )}
+
+                          {/* Connected Watchlist Targets (Shows ALL matching targets) */}
+                          <View style={styles.tlWatchlistConnectBox}>
+                            <View style={styles.tlWatchlistConnectHeader}>
+                              <Text style={styles.tlWatchlistConnectTitle}>
+                                🎯 PERKIRAAN TARGET PENGGANTI DARI WATCHLIST ({matchingTargets.length}):
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => openAddWatchlist(player)}
+                                style={styles.tlAddTargetMiniBtn}>
+                                <Text style={styles.tlAddTargetMiniBtnText}>+ INCAR TARGET</Text>
+                              </TouchableOpacity>
+                            </View>
+
+                            {matchingTargets.length === 0 ? (
+                              <Text style={styles.tlNoTargetText}>
+                                ℹ️ Belum ada target di Transfer Watchlist untuk posisi {primaryPos}. Tekan "+ Incar Target" untuk mencatat incaran baru.
+                              </Text>
+                            ) : (
+                              <View style={{ gap: 6, marginTop: 4 }}>
+                                {matchingTargets.map((t) => (
+                                  <View key={t.id} style={styles.tlTargetItemRow}>
+                                    <View style={styles.tlTargetItemBadge}>
+                                      <Text style={styles.tlTargetItemBadgeText}>{t.position_nama}</Text>
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={styles.tlTargetItemName}>
+                                        {t.nama_target ? t.nama_target : `Target Pemain ${t.position_nama}`}
+                                        <Text style={styles.tlTargetItemOvr}>
+                                          {' '}
+                                          (Target OVR:{' '}
+                                          {t.target_ovr_min && t.target_ovr_max
+                                            ? `${t.target_ovr_min}–${t.target_ovr_max}`
+                                            : t.target_ovr_min
+                                            ? `Min ${t.target_ovr_min}`
+                                            : 'Bebas'}
+                                          )
+                                        </Text>
+                                      </Text>
+                                      {t.catatan && (
+                                        <Text style={styles.tlTargetItemNote}>"{t.catatan}"</Text>
+                                      )}
+                                    </View>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+                          </View>
+
+                          {/* Quick Actions */}
+                          <View style={styles.tlActionsRow}>
+                            <TouchableOpacity
+                              style={styles.tlSoldConfirmBtn}
+                              onPress={() => handleMarkAsSold(player)}
+                              activeOpacity={0.8}>
+                              <Text style={styles.tlSoldConfirmBtnText}>✅ Tandai Sudah Terjual</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.tlCancelBtn}
+                              onPress={() => handleCancelSell(player)}>
+                              <Text style={styles.tlCancelBtnText}>🔄 Batal Jual</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.tlEditBtn}
+                              onPress={() => openEditTransferLoan(player)}>
+                              <Text style={styles.tlEditBtnText}>✏️ Edit</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </ScrollView>
+              )}
+
+              {/* ─── SUB-TAB 2: DAFTAR PINJAMAN ──────────── */}
+              {tlSubTab === 'loan' && (
+                <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+                  {filteredLoanPlayers.length === 0 ? (
+                    <View style={styles.emptyCard}>
+                      <Text style={styles.emptyTitle}>
+                        {loanPlayers.length === 0 ? 'Belum Ada Pemain yang Dipinjamkan' : 'Pemain Tidak Ditemukan'}
+                      </Text>
+                      <Text style={styles.emptySub}>
+                        {loanPlayers.length === 0
+                          ? 'Gunakan tombol "+ TAMBAH PEMAIN" di atas untuk meminjamkan pemain muda/cadangan ke klub lain.'
+                          : 'Coba ganti filter posisi atau kata kunci pencarian.'}
+                      </Text>
+                    </View>
+                  ) : (
+                    filteredLoanPlayers.map((player) => {
+                      const primaryPos = player.positions[0]?.nama ?? '-';
+                      const durasiLabel =
+                        player.status_durasi === '6_bulan'
+                          ? '6 Bulan'
+                          : player.status_durasi === '2_tahun'
+                          ? '2 Tahun'
+                          : '1 Tahun';
+                      const hasOpsiBeli = player.status_catatan?.includes('[OPSI BELI]') ?? false;
+                      const cleanNote = (player.status_catatan ?? '').replace('[OPSI BELI] ', '').replace('[OPSI BELI]', '');
+
+                      return (
+                        <View key={player.id} style={styles.tlLoanCard}>
+                          {/* Top: Player Name & OVR */}
+                          <View style={styles.watchCardTop}>
+                            <View style={[styles.watchPosBadge, { backgroundColor: '#0A1128' }]}>
+                              <Text style={styles.watchPosBadgeText}>{primaryPos}</Text>
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 12 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={styles.watchPlayerNameHeader}>{player.nama}</Text>
+                                <View style={styles.loanBadgeTag}>
+                                  <Text style={styles.loanBadgeTagText}>DIPINJAMKAN</Text>
+                                </View>
+                              </View>
+                              <Text style={styles.tlPlayerSub}>
+                                OVR: {player.ovr_current} • Posisi: {player.positions.map((p) => p.nama).join(', ')}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Loan Badges: Durasi & Opsi Beli */}
+                          <View style={styles.tlLoanBadgesRow}>
+                            <View style={styles.tlLoanDurationBadge}>
+                              <Text style={styles.tlLoanDurationBadgeText}>⏱️ Durasi: {durasiLabel}</Text>
+                            </View>
+
+                            <View
+                              style={[
+                                styles.tlLoanOptionBadge,
+                                hasOpsiBeli && styles.tlLoanOptionBadgeBuy,
+                              ]}>
+                              <Text
+                                style={[
+                                  styles.tlLoanOptionBadgeText,
+                                  hasOpsiBeli && styles.tlLoanOptionBadgeTextBuy,
+                                ]}>
+                                {hasOpsiBeli ? '🏷️ Dengan Opsi Beli' : '🛡️ Pinjaman Murni'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Notes */}
+                          {cleanNote ? (
+                            <View style={styles.watchNoteBox}>
+                              <Text style={styles.watchNoteLabel}>📝 Catatan Pinjaman / Klub Tujuan:</Text>
+                              <Text style={styles.watchNoteText}>"{cleanNote}"</Text>
+                            </View>
+                          ) : null}
+
+                          {/* Actions */}
+                          <View style={styles.tlActionsRow}>
+                            <TouchableOpacity
+                              style={styles.tlRecallBtn}
+                              onPress={() => handleRecallLoan(player)}
+                              activeOpacity={0.8}>
+                              <Text style={styles.tlRecallBtnText}>🔙 Recall ke Skuad</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.tlEditBtn}
+                              onPress={() => openEditTransferLoan(player)}>
+                              <Text style={styles.tlEditBtnText}>✏️ Edit Pinjaman</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </ScrollView>
+              )}
+            </View>
+          )}
+
+          {/* ─── 4. PEMAIN TERJUAL SECTION ─────────────── */}
           {activeMenu === 'sold_players' && (
             <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
               <View style={styles.soldBanner}>
@@ -872,7 +1459,7 @@ export default function MoreMenuScreen() {
                 <View style={styles.emptyCard}>
                   <Text style={styles.emptyTitle}>Belum Ada Pemain Terjual</Text>
                   <Text style={styles.emptySub}>
-                    Untuk mengarsipkan penjualan pemain, ubah status pemain menjadi "Sudah Dijual" di tab Pemain.
+                    Untuk mengarsipkan penjualan pemain, ubah status pemain menjadi "Sudah Dijual" di menu Transfer List atau tab Pemain.
                   </Text>
                 </View>
               ) : (
@@ -913,7 +1500,7 @@ export default function MoreMenuScreen() {
             </ScrollView>
           )}
 
-          {/* ─── 4. BACKUP & RESTORE SECTION ───────────── */}
+          {/* ─── 5. BACKUP & RESTORE SECTION ───────────── */}
           {activeMenu === 'backup' && (
             <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
               <View style={styles.backupCard}>
@@ -988,7 +1575,7 @@ export default function MoreMenuScreen() {
             </ScrollView>
           )}
 
-          {/* ─── 5. TENTANG & DEV SECTION ──────────────── */}
+          {/* ─── 6. TENTANG & DEV SECTION ──────────────── */}
           {activeMenu === 'about' && (
             <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
               {/* Developer Card */}
@@ -1017,6 +1604,7 @@ export default function MoreMenuScreen() {
                 <Text style={styles.aboutBullet}>• 📊 Monitor Kebutuhan Kuota Posisi (Dual-Mode)</Text>
                 <Text style={styles.aboutBullet}>• 📁 Multi-Save Career Mode Profile Manager</Text>
                 <Text style={styles.aboutBullet}>• 🎯 Transfer Watchlist & Pengganti Pemain</Text>
+                <Text style={styles.aboutBullet}>• 📤 Transfer & Loan List (Jual & Pinjamkan)</Text>
                 <Text style={styles.aboutBullet}>• 🏷️ Arsip Penjualan Pemain Terjual</Text>
                 <Text style={styles.aboutBullet}>• 💾 Backup & Restore Full JSON</Text>
               </View>
@@ -1099,7 +1687,7 @@ export default function MoreMenuScreen() {
         </Pressable>
       </Modal>
 
-      {/* ─── ADD/EDIT WATCHLIST MODAL (REVAMPED CLEAN FORM) ── */}
+      {/* ─── ADD/EDIT WATCHLIST MODAL ───────────────── */}
       <Modal
         visible={showWatchModal}
         transparent
@@ -1172,7 +1760,7 @@ export default function MoreMenuScreen() {
                   </View>
                 </View>
 
-                {/* Field 4: Pemain yang Akan Digantikan (Large Trigger Button) */}
+                {/* Field 4: Pemain yang Akan Digantikan */}
                 <Text style={styles.fieldLabel}>AKAN MENGGANTIKAN PEMAIN (OPSIONAL):</Text>
                 <TouchableOpacity
                   style={styles.selectorTriggerBtn}
@@ -1227,17 +1815,203 @@ export default function MoreMenuScreen() {
         </Pressable>
       </Modal>
 
-      {/* ─── POSITION FILTER MODAL FOR WATCHLIST LIST ─ */}
+      {/* ─── ADD/EDIT TRANSFER & LOAN MODAL (NEW) ───── */}
       <Modal
-        visible={showWFilterPosModal}
+        visible={showAddTlModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddTlModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowAddTlModal(false)}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalCenter}>
+            <Pressable style={styles.formModalCard} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.modalTitle}>
+                {tlEditPlayerTarget
+                  ? `✏️ EDIT STATUS TRANSFER / PINJAMAN`
+                  : `📤 TAMBAH KE DAFTAR JUAL / PINJAM`}
+              </Text>
+
+              <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+                {/* Field 1: Pilih Pemain Skuad */}
+                <Text style={styles.fieldLabel}>PILIH PEMAIN SKUAD:</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.selectorTriggerBtn,
+                    tlEditPlayerTarget !== null && { opacity: 0.8 },
+                  ]}
+                  onPress={() => {
+                    if (tlEditPlayerTarget) return; // cannot change player in edit mode
+                    setTlPlayerPickerSearch('');
+                    setShowTlPlayerPickerModal(true);
+                  }}
+                  disabled={tlEditPlayerTarget !== null}
+                  activeOpacity={0.8}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <View style={styles.selectorTriggerBadge}>
+                      <Text style={styles.selectorTriggerBadgeText}>
+                        {selectedTlPlayerObj ? `OVR ${selectedTlPlayerObj.ovr_current}` : 'PILIH'}
+                      </Text>
+                    </View>
+                    <Text style={styles.selectorTriggerText} numberOfLines={1}>
+                      {selectedTlPlayerObj
+                        ? `${selectedTlPlayerObj.nama} (${selectedTlPlayerObj.positions[0]?.nama ?? '-'})`
+                        : 'Pilih Pemain Skuad'}
+                    </Text>
+                  </View>
+                  {!tlEditPlayerTarget && <Text style={styles.selectorTriggerArrow}>PILIH ▾</Text>}
+                </TouchableOpacity>
+
+                {/* Field 2: Tipe Status (Akan Dijual vs Dipinjamkan) */}
+                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>TETAPKAN STATUS PEMAIN:</Text>
+                <View style={styles.tlTypeChoiceRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.tlTypeChoiceBtn,
+                      tlType === 'akan_dijual' && styles.tlTypeChoiceBtnActiveJual,
+                    ]}
+                    onPress={() => setTlType('akan_dijual')}>
+                    <Text
+                      style={[
+                        styles.tlTypeChoiceBtnText,
+                        tlType === 'akan_dijual' && styles.tlTypeChoiceBtnTextActiveJual,
+                      ]}>
+                      🔴 Rencana Jual
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.tlTypeChoiceBtn,
+                      tlType === 'loan_out' && styles.tlTypeChoiceBtnActiveLoan,
+                    ]}
+                    onPress={() => setTlType('loan_out')}>
+                    <Text
+                      style={[
+                        styles.tlTypeChoiceBtnText,
+                        tlType === 'loan_out' && styles.tlTypeChoiceBtnTextActiveLoan,
+                      ]}>
+                      🟡 Dipinjamkan
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* If Loan Out: Durasi Pinjaman (6 Bulan, 1 Tahun, 2 Tahun) */}
+                {tlType === 'loan_out' && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.fieldLabel}>DURASI PINJAMAN:</Text>
+                    <View style={styles.tlDurasiRow}>
+                      {(['6_bulan', '1_tahun', '2_tahun'] as StatusDurasi[]).map((d) => {
+                        const isSel = tlDurasi === d;
+                        const label = d === '6_bulan' ? '6 Bulan' : d === '1_tahun' ? '1 Tahun' : '2 Tahun';
+                        return (
+                          <TouchableOpacity
+                            key={d}
+                            style={[styles.tlDurasiBtn, isSel && styles.tlDurasiBtnActive]}
+                            onPress={() => setTlDurasi(d)}>
+                            <Text style={[styles.tlDurasiBtnText, isSel && styles.tlDurasiBtnTextActive]}>
+                              {label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {/* Opsi Pembelian Dropdown / Selector */}
+                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>OPSI PEMBELIAN (LOAN OPTION):</Text>
+                    <View style={styles.tlOpsiBeliRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.tlOpsiBeliBtn,
+                          !tlIsOpsiBeli && styles.tlOpsiBeliBtnActive,
+                        ]}
+                        onPress={() => setTlIsOpsiBeli(false)}>
+                        <Text
+                          style={[
+                            styles.tlOpsiBeliBtnText,
+                            !tlIsOpsiBeli && styles.tlOpsiBeliBtnTextActive,
+                          ]}>
+                          🛡️ Pinjaman Murni (Tanpa Opsi Beli)
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.tlOpsiBeliBtn,
+                          tlIsOpsiBeli && styles.tlOpsiBeliBtnActiveBuy,
+                        ]}
+                        onPress={() => setTlIsOpsiBeli(true)}>
+                        <Text
+                          style={[
+                            styles.tlOpsiBeliBtnText,
+                            tlIsOpsiBeli && styles.tlOpsiBeliBtnTextActiveBuy,
+                          ]}>
+                          🏷️ Pinjaman dengan Opsi Beli (Loan to Buy)
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* Field 3: Catatan */}
+                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
+                  {tlType === 'akan_dijual'
+                    ? 'ALASAN PENJUALAN / TARGET KLUB PEMINAT:'
+                    : 'CATATAN PINJAMAN / KLUB TUJUAN:'}
+                </Text>
+                <TextInput
+                  style={[styles.modalInput, { height: 65, textAlignVertical: 'top' }]}
+                  placeholder={
+                    tlType === 'akan_dijual'
+                      ? 'misal: Surplus kuota sayap, butuh dana peremajaan bek'
+                      : 'misal: Dipinjamkan ke Girona untuk menit bermain tim utama'
+                  }
+                  placeholderTextColor="#999"
+                  value={tlCatatan}
+                  onChangeText={setTlCatatan}
+                  multiline
+                />
+              </ScrollView>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setShowAddTlModal(false)}>
+                  <Text style={styles.modalCancelText}>BATAL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleSaveTransferLoan}>
+                  <Text style={styles.modalConfirmText}>SIMPAN STATUS</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* ─── POSITION FILTER MODAL (SHARED WATCHLIST & TL) ── */}
+      <Modal
+        visible={showWFilterPosModal || showTlFilterPosModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowWFilterPosModal(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowWFilterPosModal(false)}>
+        onRequestClose={() => {
+          setShowWFilterPosModal(false);
+          setShowTlFilterPosModal(false);
+        }}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            setShowWFilterPosModal(false);
+            setShowTlFilterPosModal(false);
+          }}>
           <View style={styles.filterModalCard} onStartShouldSetResponder={() => true}>
             <View style={styles.filterModalHeader}>
-              <Text style={styles.filterModalTitle}>FILTER POSISI TARGET TRANSFER</Text>
-              <TouchableOpacity onPress={() => setShowWFilterPosModal(false)} style={styles.modalCloseBtn}>
+              <Text style={styles.filterModalTitle}>FILTER BERDASARKAN POSISI</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowWFilterPosModal(false);
+                  setShowTlFilterPosModal(false);
+                }}
+                style={styles.modalCloseBtn}>
                 <Text style={styles.modalCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -1245,13 +2019,26 @@ export default function MoreMenuScreen() {
             <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
               {/* Option: Semua Posisi */}
               <TouchableOpacity
-                style={[styles.posGroupAllBtn, wFilterPos === 'ALL' && styles.posGroupAllBtnActive]}
+                style={[
+                  styles.posGroupAllBtn,
+                  ((showWFilterPosModal && wFilterPos === 'ALL') ||
+                    (showTlFilterPosModal && tlFilterPos === 'ALL')) &&
+                    styles.posGroupAllBtnActive,
+                ]}
                 onPress={() => {
-                  setWFilterPos('ALL');
+                  if (showWFilterPosModal) setWFilterPos('ALL');
+                  if (showTlFilterPosModal) setTlFilterPos('ALL');
                   setShowWFilterPosModal(false);
+                  setShowTlFilterPosModal(false);
                 }}>
-                <Text style={[styles.posGroupAllText, wFilterPos === 'ALL' && styles.posGroupAllTextActive]}>
-                  🔘 SEMUA POSISI ({watchlist.length} Target)
+                <Text
+                  style={[
+                    styles.posGroupAllText,
+                    ((showWFilterPosModal && wFilterPos === 'ALL') ||
+                      (showTlFilterPosModal && tlFilterPos === 'ALL')) &&
+                      styles.posGroupAllTextActive,
+                  ]}>
+                  🔘 SEMUA POSISI
                 </Text>
               </TouchableOpacity>
 
@@ -1261,21 +2048,20 @@ export default function MoreMenuScreen() {
                   <Text style={styles.posCategoryHeader}>🧤 PENJAGA GAWANG</Text>
                   <View style={styles.posCategoryGrid}>
                     {gkPositions.map((pos) => {
-                      const count = watchlist.filter((w) => w.position_id === pos.id).length;
-                      const isSelected = wFilterPos === pos.id;
+                      const isSelected =
+                        showWFilterPosModal ? wFilterPos === pos.id : tlFilterPos === pos.id;
                       return (
                         <TouchableOpacity
                           key={pos.id}
                           style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
                           onPress={() => {
-                            setWFilterPos(pos.id);
+                            if (showWFilterPosModal) setWFilterPos(pos.id);
+                            if (showTlFilterPosModal) setTlFilterPos(pos.id);
                             setShowWFilterPosModal(false);
+                            setShowTlFilterPosModal(false);
                           }}>
                           <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
                             {pos.nama}
-                          </Text>
-                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
-                            {count}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -1290,21 +2076,20 @@ export default function MoreMenuScreen() {
                   <Text style={styles.posCategoryHeader}>🛡️ BEK (DEFENDER)</Text>
                   <View style={styles.posCategoryGrid}>
                     {defPositions.map((pos) => {
-                      const count = watchlist.filter((w) => w.position_id === pos.id).length;
-                      const isSelected = wFilterPos === pos.id;
+                      const isSelected =
+                        showWFilterPosModal ? wFilterPos === pos.id : tlFilterPos === pos.id;
                       return (
                         <TouchableOpacity
                           key={pos.id}
                           style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
                           onPress={() => {
-                            setWFilterPos(pos.id);
+                            if (showWFilterPosModal) setWFilterPos(pos.id);
+                            if (showTlFilterPosModal) setTlFilterPos(pos.id);
                             setShowWFilterPosModal(false);
+                            setShowTlFilterPosModal(false);
                           }}>
                           <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
                             {pos.nama}
-                          </Text>
-                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
-                            {count}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -1319,21 +2104,20 @@ export default function MoreMenuScreen() {
                   <Text style={styles.posCategoryHeader}>⚙️ GELANDANG (MIDFIELDER)</Text>
                   <View style={styles.posCategoryGrid}>
                     {midPositions.map((pos) => {
-                      const count = watchlist.filter((w) => w.position_id === pos.id).length;
-                      const isSelected = wFilterPos === pos.id;
+                      const isSelected =
+                        showWFilterPosModal ? wFilterPos === pos.id : tlFilterPos === pos.id;
                       return (
                         <TouchableOpacity
                           key={pos.id}
                           style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
                           onPress={() => {
-                            setWFilterPos(pos.id);
+                            if (showWFilterPosModal) setWFilterPos(pos.id);
+                            if (showTlFilterPosModal) setTlFilterPos(pos.id);
                             setShowWFilterPosModal(false);
+                            setShowTlFilterPosModal(false);
                           }}>
                           <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
                             {pos.nama}
-                          </Text>
-                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
-                            {count}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -1348,21 +2132,20 @@ export default function MoreMenuScreen() {
                   <Text style={styles.posCategoryHeader}>⚡ PENYERANG (ATTACKER)</Text>
                   <View style={styles.posCategoryGrid}>
                     {attPositions.map((pos) => {
-                      const count = watchlist.filter((w) => w.position_id === pos.id).length;
-                      const isSelected = wFilterPos === pos.id;
+                      const isSelected =
+                        showWFilterPosModal ? wFilterPos === pos.id : tlFilterPos === pos.id;
                       return (
                         <TouchableOpacity
                           key={pos.id}
                           style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
                           onPress={() => {
-                            setWFilterPos(pos.id);
+                            if (showWFilterPosModal) setWFilterPos(pos.id);
+                            if (showTlFilterPosModal) setTlFilterPos(pos.id);
                             setShowWFilterPosModal(false);
+                            setShowTlFilterPosModal(false);
                           }}>
                           <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
                             {pos.nama}
-                          </Text>
-                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
-                            {count}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -1377,21 +2160,20 @@ export default function MoreMenuScreen() {
                   <Text style={styles.posCategoryHeader}>LAINNYA</Text>
                   <View style={styles.posCategoryGrid}>
                     {otherPositions.map((pos) => {
-                      const count = watchlist.filter((w) => w.position_id === pos.id).length;
-                      const isSelected = wFilterPos === pos.id;
+                      const isSelected =
+                        showWFilterPosModal ? wFilterPos === pos.id : tlFilterPos === pos.id;
                       return (
                         <TouchableOpacity
                           key={pos.id}
                           style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
                           onPress={() => {
-                            setWFilterPos(pos.id);
+                            if (showWFilterPosModal) setWFilterPos(pos.id);
+                            if (showTlFilterPosModal) setTlFilterPos(pos.id);
                             setShowWFilterPosModal(false);
+                            setShowTlFilterPosModal(false);
                           }}>
                           <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
                             {pos.nama}
-                          </Text>
-                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
-                            {count}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -1403,7 +2185,10 @@ export default function MoreMenuScreen() {
 
             <TouchableOpacity
               style={styles.modalBottomBtn}
-              onPress={() => setShowWFilterPosModal(false)}>
+              onPress={() => {
+                setShowWFilterPosModal(false);
+                setShowTlFilterPosModal(false);
+              }}>
               <Text style={styles.modalBottomBtnText}>TUTUP</Text>
             </TouchableOpacity>
           </View>
@@ -1426,7 +2211,7 @@ export default function MoreMenuScreen() {
             </View>
 
             <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              {/* Group: Kiper */}
+              {/* Kiper */}
               {gkPositions.length > 0 && (
                 <View style={styles.posCategorySection}>
                   <Text style={styles.posCategoryHeader}>🧤 PENJAGA GAWANG</Text>
@@ -1448,7 +2233,7 @@ export default function MoreMenuScreen() {
                 </View>
               )}
 
-              {/* Group: Bek */}
+              {/* Bek */}
               {defPositions.length > 0 && (
                 <View style={styles.posCategorySection}>
                   <Text style={styles.posCategoryHeader}>🛡️ BEK (DEFENDER)</Text>
@@ -1470,7 +2255,7 @@ export default function MoreMenuScreen() {
                 </View>
               )}
 
-              {/* Group: Gelandang */}
+              {/* Gelandang */}
               {midPositions.length > 0 && (
                 <View style={styles.posCategorySection}>
                   <Text style={styles.posCategoryHeader}>⚙️ GELANDANG (MIDFIELDER)</Text>
@@ -1492,7 +2277,7 @@ export default function MoreMenuScreen() {
                 </View>
               )}
 
-              {/* Group: Penyerang */}
+              {/* Penyerang */}
               {attPositions.length > 0 && (
                 <View style={styles.posCategorySection}>
                   <Text style={styles.posCategoryHeader}>⚡ PENYERANG (ATTACKER)</Text>
@@ -1514,7 +2299,7 @@ export default function MoreMenuScreen() {
                 </View>
               )}
 
-              {/* Other positions */}
+              {/* Lainnya */}
               {otherPositions.length > 0 && (
                 <View style={styles.posCategorySection}>
                   <Text style={styles.posCategoryHeader}>LAINNYA</Text>
@@ -1546,7 +2331,7 @@ export default function MoreMenuScreen() {
         </Pressable>
       </Modal>
 
-      {/* ─── PLAYER REPLACEMENT PICKER MODAL FOR WATCHLIST ─ */}
+      {/* ─── PLAYER REPLACEMENT PICKER MODAL (WATCHLIST) ─ */}
       <Modal
         visible={showPlayerPickerModal}
         transparent
@@ -1561,7 +2346,6 @@ export default function MoreMenuScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Search Bar for Player Picker */}
             <View style={[styles.wSearchRow, { marginHorizontal: 0, marginBottom: 10 }]}>
               <TextInput
                 style={styles.wSearchInput}
@@ -1662,6 +2446,87 @@ export default function MoreMenuScreen() {
             <TouchableOpacity
               style={styles.modalBottomBtn}
               onPress={() => setShowPlayerPickerModal(false)}>
+              <Text style={styles.modalBottomBtnText}>TUTUP</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ─── SQUAD PLAYER PICKER MODAL FOR TRANSFER & LOAN ─ */}
+      <Modal
+        visible={showTlPlayerPickerModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowTlPlayerPickerModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowTlPlayerPickerModal(false)}>
+          <View style={styles.filterModalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>PILIH PEMAIN SKUAD</Text>
+              <TouchableOpacity onPress={() => setShowTlPlayerPickerModal(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.wSearchRow, { marginHorizontal: 0, marginBottom: 10 }]}>
+              <TextInput
+                style={styles.wSearchInput}
+                placeholder="🔍 Cari nama pemain atau posisi..."
+                placeholderTextColor="#888"
+                value={tlPlayerPickerSearch}
+                onChangeText={setTlPlayerPickerSearch}
+              />
+              {tlPlayerPickerSearch.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setTlPlayerPickerSearch('')}
+                  style={styles.wSearchClearBtn}>
+                  <Text style={styles.wSearchClearText}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              {availableSquadPlayersForTl.map((p) => {
+                const isSelected = tlSelectedPlayerId === p.id;
+                const primaryPos = p.positions[0]?.nama ?? '-';
+
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[
+                      styles.playerPickerItem,
+                      isSelected && styles.playerPickerItemActive,
+                    ]}
+                    onPress={() => {
+                      setTlSelectedPlayerId(p.id);
+                      setShowTlPlayerPickerModal(false);
+                    }}>
+                    <View style={styles.playerPickerItemLeft}>
+                      <View style={styles.playerPickerOvrBadge}>
+                        <Text style={styles.playerPickerOvrText}>{p.ovr_current}</Text>
+                        <Text style={styles.playerPickerPosText}>{primaryPos}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[
+                            styles.playerPickerName,
+                            isSelected && styles.playerPickerNameActive,
+                          ]}>
+                          {p.nama}
+                        </Text>
+                        <Text style={styles.playerPickerSub}>
+                          Posisi: {p.positions.map((pos) => pos.nama).join(', ')} • Status: {p.status.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                    {isSelected && <Text style={styles.playerPickerCheck}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalBottomBtn}
+              onPress={() => setShowTlPlayerPickerModal(false)}>
               <Text style={styles.modalBottomBtnText}>TUTUP</Text>
             </TouchableOpacity>
           </View>
@@ -1937,7 +2802,44 @@ const styles = StyleSheet.create({
     color: '#D4AF37',
   },
 
-  // Watchlist Filters
+  // Segmented Bar (Transfer & Loan)
+  tlSegmentBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FAFAFA',
+    borderBottomWidth: 2,
+    borderBottomColor: '#000',
+    padding: 8,
+    gap: 8,
+  },
+  tlSegmentBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#FFF',
+  },
+  tlSegmentBtnActiveJual: {
+    backgroundColor: '#C5221F',
+  },
+  tlSegmentBtnActiveLoan: {
+    backgroundColor: '#0A1128',
+  },
+  tlSegmentBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 0.5,
+  },
+  tlSegmentBtnTextActiveJual: {
+    color: '#FFF',
+  },
+  tlSegmentBtnTextActiveLoan: {
+    color: '#D4AF37',
+  },
+
+  // Filters Container (Shared)
   wFilterContainer: {
     padding: 12,
     backgroundColor: '#FAFAFA',
@@ -2195,6 +3097,287 @@ const styles = StyleSheet.create({
     color: '#C5221F',
   },
 
+  // Transfer & Loan Cards (Jual & Loan)
+  tlSellCard: {
+    backgroundColor: '#FFF8F6',
+    borderWidth: 2.5,
+    borderColor: '#C5221F',
+    padding: 14,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  tlLoanCard: {
+    backgroundColor: '#FAFAFA',
+    borderWidth: 2.5,
+    borderColor: '#0A1128',
+    padding: 14,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  tlPlayerSub: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#555',
+    marginTop: 2,
+  },
+  tlLoanBadgesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  tlLoanDurationBadge: {
+    backgroundColor: '#0A1128',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  tlLoanDurationBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#D4AF37',
+  },
+  tlLoanOptionBadge: {
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  tlLoanOptionBadgeBuy: {
+    backgroundColor: '#B06000',
+  },
+  tlLoanOptionBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#333',
+  },
+  tlLoanOptionBadgeTextBuy: {
+    color: '#FFF',
+  },
+  tlWatchlistConnectBox: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#B06000',
+    padding: 10,
+    marginBottom: 10,
+  },
+  tlWatchlistConnectHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  tlWatchlistConnectTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#B06000',
+    letterSpacing: 0.5,
+    flex: 1,
+  },
+  tlAddTargetMiniBtn: {
+    backgroundColor: '#B06000',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  tlAddTargetMiniBtnText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FFF',
+  },
+  tlNoTargetText: {
+    fontSize: 10.5,
+    color: '#777',
+    fontStyle: 'italic',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  tlTargetItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1,
+    borderColor: '#DDD',
+    padding: 6,
+  },
+  tlTargetItemBadge: {
+    backgroundColor: '#0A1128',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginRight: 8,
+  },
+  tlTargetItemBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#D4AF37',
+  },
+  tlTargetItemName: {
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: '#0A1128',
+  },
+  tlTargetItemOvr: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#B06000',
+  },
+  tlTargetItemNote: {
+    fontSize: 9.5,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 1,
+  },
+  tlActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  tlSoldConfirmBtn: {
+    flex: 1.5,
+    backgroundColor: '#C5221F',
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#000',
+  },
+  tlSoldConfirmBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#FFF',
+  },
+  tlRecallBtn: {
+    flex: 1.5,
+    backgroundColor: '#0A1128',
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#000',
+  },
+  tlRecallBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#D4AF37',
+  },
+  tlCancelBtn: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#000',
+    paddingVertical: 8,
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+  },
+  tlCancelBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0A1128',
+  },
+  tlEditBtn: {
+    borderWidth: 1.5,
+    borderColor: '#000',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FFF',
+  },
+  tlEditBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0A1128',
+  },
+
+  // Transfer & Loan Form Styles
+  tlTypeChoiceRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 6,
+  },
+  tlTypeChoiceBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: '#FAFAFA',
+  },
+  tlTypeChoiceBtnActiveJual: {
+    backgroundColor: '#C5221F',
+  },
+  tlTypeChoiceBtnActiveLoan: {
+    backgroundColor: '#0A1128',
+  },
+  tlTypeChoiceBtnText: {
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: '#333',
+  },
+  tlTypeChoiceBtnTextActiveJual: {
+    color: '#FFF',
+  },
+  tlTypeChoiceBtnTextActiveLoan: {
+    color: '#D4AF37',
+  },
+  tlDurasiRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 6,
+  },
+  tlDurasiBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#000',
+    backgroundColor: '#FAFAFA',
+  },
+  tlDurasiBtnActive: {
+    backgroundColor: '#0A1128',
+  },
+  tlDurasiBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0A1128',
+  },
+  tlDurasiBtnTextActive: {
+    color: '#D4AF37',
+  },
+  tlOpsiBeliRow: {
+    gap: 6,
+    marginBottom: 6,
+  },
+  tlOpsiBeliBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1.5,
+    borderColor: '#000',
+    backgroundColor: '#FAFAFA',
+  },
+  tlOpsiBeliBtnActive: {
+    backgroundColor: '#0A1128',
+  },
+  tlOpsiBeliBtnActiveBuy: {
+    backgroundColor: '#B06000',
+  },
+  tlOpsiBeliBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#333',
+  },
+  tlOpsiBeliBtnTextActive: {
+    color: '#D4AF37',
+  },
+  tlOpsiBeliBtnTextActiveBuy: {
+    color: '#FFF',
+  },
+
   // Form Selector Trigger Button
   selectorTriggerBtn: {
     flexDirection: 'row',
@@ -2295,14 +3478,24 @@ const styles = StyleSheet.create({
     color: '#0A1128',
   },
   akanDijualTag: {
-    backgroundColor: '#B06000',
-    paddingHorizontal: 4,
+    backgroundColor: '#C5221F',
+    paddingHorizontal: 5,
     paddingVertical: 1,
   },
   akanDijualTagText: {
-    fontSize: 8,
+    fontSize: 8.5,
     fontWeight: '900',
     color: '#FFF',
+  },
+  loanBadgeTag: {
+    backgroundColor: '#0A1128',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  loanBadgeTagText: {
+    fontSize: 8.5,
+    fontWeight: '900',
+    color: '#D4AF37',
   },
 
   // Categorized Position Modals (Shared with Players screen)
