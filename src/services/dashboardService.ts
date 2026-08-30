@@ -8,19 +8,23 @@ import { listPlayers } from './playerService';
 import { listPositions } from './positionService';
 import { listSquadsWithDetails, type SquadFull } from './squadService';
 import { listWatchlist, type WatchlistWithDetails } from './watchlistService';
-import type { PositionQuota, PositionQuotaSettings } from '@/src/types';
+import type { PositionQuota, PositionQuotaSettings, PlayerWithPositions } from '@/src/types';
 
 export interface DashboardData {
   profileName: string;
   totalPlayers: number;
   activeCount: number;
   loanCount: number;
+  loanInCount: number;
   injuredCount: number;
   akanDijualCount: number;
   squads: SquadFull[];
   positionQuotas: PositionQuota[];
   bufferMultiplier: number;
   topWatchlist: WatchlistWithDetails[];
+  akanDijualList: PlayerWithPositions[];
+  loanOutList: PlayerWithPositions[];
+  loanInList: PlayerWithPositions[];
 }
 
 /**
@@ -145,19 +149,28 @@ export async function getDashboardData(profileId: string): Promise<DashboardData
   const squadPlayers = players.filter((p) => p.status !== 'sudah_dijual');
   const activeCount = players.filter((p) => p.status === 'aktif').length;
   const loanCount = players.filter((p) => p.status === 'loan_out').length;
+  const loanInCount = players.filter((p) => p.status === 'loan_in').length;
   const injuredCount = players.filter((p) => p.status === 'injured').length;
   const akanDijualCount = players.filter((p) => p.status === 'akan_dijual').length;
+
+  const akanDijualList = players.filter((p) => p.status === 'akan_dijual');
+  const loanOutList = players.filter((p) => p.status === 'loan_out');
+  const loanInList = players.filter((p) => p.status === 'loan_in');
 
   return {
     profileName: '',
     totalPlayers: squadPlayers.length,
     activeCount,
     loanCount,
+    loanInCount,
     injuredCount,
     akanDijualCount,
     squads,
     positionQuotas: quotas,
     bufferMultiplier,
     topWatchlist: watchlist.slice(0, 5),
+    akanDijualList,
+    loanOutList,
+    loanInList,
   };
 }

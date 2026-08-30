@@ -290,6 +290,131 @@ export default function HomeScreen() {
           )}
         </View>
 
+        {/* ─── Transfer & Loan Activity Overview Card ── */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>STATUS TRANSFER & PINJAMAN</Text>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/profile' as any)}>
+            <Text style={styles.seeAllText}>Kelola Lengkap ➔</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.tlSummaryCard}>
+          {/* Top Row Stats */}
+          <View style={styles.tlSummaryStatsRow}>
+            <View style={[styles.tlStatPill, { borderColor: '#C5221F' }]}>
+              <Text style={[styles.tlStatPillNum, { color: '#C5221F' }]}>
+                {d?.akanDijualCount ?? 0}
+              </Text>
+              <Text style={styles.tlStatPillLabel}>RENCANA JUAL</Text>
+            </View>
+
+            <View style={[styles.tlStatPill, { borderColor: '#B06000' }]}>
+              <Text style={[styles.tlStatPillNum, { color: '#B06000' }]}>
+                {d?.loanCount ?? 0}
+              </Text>
+              <Text style={styles.tlStatPillLabel}>LOAN OUT</Text>
+            </View>
+
+            <View style={[styles.tlStatPill, { borderColor: '#137333' }]}>
+              <Text style={[styles.tlStatPillNum, { color: '#137333' }]}>
+                {d?.loanInCount ?? 0}
+              </Text>
+              <Text style={styles.tlStatPillLabel}>LOAN IN</Text>
+            </View>
+          </View>
+
+          {/* Players Preview List */}
+          {(d?.akanDijualCount ?? 0) === 0 &&
+          (d?.loanCount ?? 0) === 0 &&
+          (d?.loanInCount ?? 0) === 0 ? (
+            <View style={styles.tlCleanBox}>
+              <Text style={styles.tlCleanText}>
+                ✅ Skuad Bersih - Tidak ada pemain yang sedang dalam status rencana jual atau pinjaman.
+              </Text>
+            </View>
+          ) : (
+            <View style={{ gap: 8, marginTop: 10 }}>
+              {/* Rencana Jual Previews */}
+              {(d?.akanDijualList?.length ?? 0) > 0 && (
+                <View style={styles.tlGroupSection}>
+                  <Text style={[styles.tlGroupTitle, { color: '#C5221F' }]}>
+                    🔴 RENCANA JUAL ({d?.akanDijualList.length})
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tlChipScroll}>
+                    {d?.akanDijualList.map((p) => (
+                      <View key={p.id} style={[styles.tlPlayerChip, { borderColor: '#C5221F' }]}>
+                        <View style={[styles.tlPlayerChipOvr, { backgroundColor: '#C5221F' }]}>
+                          <Text style={styles.tlPlayerChipOvrText}>{p.ovr_current}</Text>
+                        </View>
+                        <View>
+                          <Text style={styles.tlPlayerChipName} numberOfLines={1}>{p.nama}</Text>
+                          <Text style={styles.tlPlayerChipPos}>{p.positions[0]?.nama ?? '-'}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Loan Out Previews */}
+              {(d?.loanOutList?.length ?? 0) > 0 && (
+                <View style={styles.tlGroupSection}>
+                  <Text style={[styles.tlGroupTitle, { color: '#B06000' }]}>
+                    🟡 DIPINJAMKAN KELUAR ({d?.loanOutList.length})
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tlChipScroll}>
+                    {d?.loanOutList.map((p) => (
+                      <View key={p.id} style={[styles.tlPlayerChip, { borderColor: '#B06000' }]}>
+                        <View style={[styles.tlPlayerChipOvr, { backgroundColor: '#B06000' }]}>
+                          <Text style={styles.tlPlayerChipOvrText}>{p.ovr_current}</Text>
+                        </View>
+                        <View>
+                          <Text style={styles.tlPlayerChipName} numberOfLines={1}>{p.nama}</Text>
+                          <Text style={styles.tlPlayerChipPos}>
+                            {p.positions[0]?.nama ?? '-'} • {p.status_durasi === '6_bulan' ? '6Bln' : p.status_durasi === '2_tahun' ? '2Thn' : '1Thn'}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Loan In Previews */}
+              {(d?.loanInList?.length ?? 0) > 0 && (
+                <View style={styles.tlGroupSection}>
+                  <Text style={[styles.tlGroupTitle, { color: '#137333' }]}>
+                    🟢 PINJAMAN MASUK ({d?.loanInList.length})
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tlChipScroll}>
+                    {d?.loanInList.map((p) => (
+                      <View key={p.id} style={[styles.tlPlayerChip, { borderColor: '#137333' }]}>
+                        <View style={[styles.tlPlayerChipOvr, { backgroundColor: '#137333' }]}>
+                          <Text style={styles.tlPlayerChipOvrText}>{p.ovr_current}</Text>
+                        </View>
+                        <View>
+                          <Text style={styles.tlPlayerChipName} numberOfLines={1}>{p.nama}</Text>
+                          <Text style={styles.tlPlayerChipPos}>
+                            {p.positions[0]?.nama ?? '-'} • {p.status_durasi === '6_bulan' ? '6Bln' : p.status_durasi === '2_tahun' ? '2Thn' : '1Thn'}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Action Button */}
+          <TouchableOpacity
+            style={styles.tlManageActionBtn}
+            onPress={() => router.push('/(tabs)/profile' as any)}
+            activeOpacity={0.8}>
+            <Text style={styles.tlManageActionBtnText}>BUKA TRANSFER & LOAN LIST ➔</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* ─── Watchlist Summary ───────────────────── */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>TRANSFER WATCHLIST</Text>
@@ -890,6 +1015,117 @@ const styles = StyleSheet.create({
     color: '#666',
     fontStyle: 'italic',
     marginTop: 1,
+  },
+
+  // Transfer & Loan Activity Card Styles
+  tlSummaryCard: {
+    backgroundColor: '#FAFAFA',
+    borderWidth: 2.5,
+    borderColor: '#000',
+    padding: 14,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  tlSummaryStatsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tlStatPill: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    borderWidth: 2,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  tlStatPillNum: {
+    fontSize: 16,
+    fontWeight: '900',
+    lineHeight: 18,
+  },
+  tlStatPillLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#0A1128',
+    marginTop: 2,
+    letterSpacing: 0.5,
+  },
+  tlCleanBox: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#137333',
+    padding: 10,
+    marginTop: 10,
+  },
+  tlCleanText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#137333',
+    textAlign: 'center',
+  },
+  tlGroupSection: {
+    backgroundColor: '#FFF',
+    borderWidth: 1.5,
+    borderColor: '#DDD',
+    padding: 8,
+  },
+  tlGroupTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  tlChipScroll: {
+    gap: 6,
+    paddingRight: 10,
+  },
+  tlPlayerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1.5,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    gap: 6,
+  },
+  tlPlayerChipOvr: {
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  tlPlayerChipOvrText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFF',
+  },
+  tlPlayerChipName: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#0A1128',
+    maxWidth: 100,
+  },
+  tlPlayerChipPos: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#666',
+  },
+  tlManageActionBtn: {
+    marginTop: 12,
+    backgroundColor: '#0A1128',
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#000',
+  },
+  tlManageActionBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#D4AF37',
+    letterSpacing: 0.5,
   },
 
   // Simulation Picker Modal

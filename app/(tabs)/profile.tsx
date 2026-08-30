@@ -86,6 +86,7 @@ export default function MoreMenuScreen() {
   const [wCatatan, setWCatatan] = useState('');
   const [wTerkaitPlayerId, setWTerkaitPlayerId] = useState<string | null>(null);
   const [playerPickerSearch, setPlayerPickerSearch] = useState('');
+  const [wPlayerPickerPosCat, setWPlayerPickerPosCat] = useState<'ALL' | 'GK' | 'DEF' | 'MID' | 'ATT'>('ALL');
 
   // ─── Transfer & Loan List State ───────────────────
   const [tlSubTab, setTlSubTab] = useState<'jual' | 'loan_out' | 'loan_in'>('jual');
@@ -103,6 +104,7 @@ export default function MoreMenuScreen() {
   const [tlIsOpsiBeli, setTlIsOpsiBeli] = useState(false);
   const [tlCatatan, setTlCatatan] = useState('');
   const [tlPlayerPickerSearch, setTlPlayerPickerSearch] = useState('');
+  const [tlPlayerPickerPosCat, setTlPlayerPickerPosCat] = useState<'ALL' | 'GK' | 'DEF' | 'MID' | 'ATT'>('ALL');
 
   const loadData = useCallback(async () => {
     if (!activeProfile) return;
@@ -234,11 +236,29 @@ export default function MoreMenuScreen() {
   const selectedTlFilterPosObj = positions.find((p) => p.id === tlFilterPos);
   const selectedTlPlayerObj = players.find((p) => p.id === tlSelectedPlayerId);
 
+  // Category helper for player picker
+  const matchPosCategory = useCallback(
+    (posName: string, cat: 'ALL' | 'GK' | 'DEF' | 'MID' | 'ATT'): boolean => {
+      if (cat === 'ALL') return true;
+      const name = posName.toUpperCase();
+      if (cat === 'GK') return name === 'GK';
+      if (cat === 'DEF') return ['LB', 'LWB', 'CB', 'RB', 'RWB'].includes(name);
+      if (cat === 'MID') return ['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(name);
+      if (cat === 'ATT') return ['LW', 'RW', 'LF', 'RF', 'CF', 'ST'].includes(name);
+      return true;
+    },
+    []
+  );
+
   // Filtered players inside Replacement Picker (for Watchlist Form)
   const pickerFilteredPlayers = useMemo(() => {
     return players
       .filter((p) => p.status !== 'sudah_dijual')
       .filter((p) => {
+        if (wPlayerPickerPosCat !== 'ALL') {
+          const matchCat = p.positions.some((pos) => matchPosCategory(pos.nama, wPlayerPickerPosCat));
+          if (!matchCat) return false;
+        }
         if (!playerPickerSearch.trim()) return true;
         const q = playerPickerSearch.toLowerCase();
         return (
@@ -251,13 +271,17 @@ export default function MoreMenuScreen() {
         if (b.status === 'akan_dijual' && a.status !== 'akan_dijual') return 1;
         return b.ovr_current - a.ovr_current;
       });
-  }, [players, playerPickerSearch]);
+  }, [players, playerPickerSearch, wPlayerPickerPosCat, matchPosCategory]);
 
   // Available players to add into Transfer / Loan List (Active players)
   const availableSquadPlayersForTl = useMemo(() => {
     return players
       .filter((p) => p.status !== 'sudah_dijual')
       .filter((p) => {
+        if (tlPlayerPickerPosCat !== 'ALL') {
+          const matchCat = p.positions.some((pos) => matchPosCategory(pos.nama, tlPlayerPickerPosCat));
+          if (!matchCat) return false;
+        }
         if (!tlPlayerPickerSearch.trim()) return true;
         const q = tlPlayerPickerSearch.toLowerCase();
         return (
@@ -266,7 +290,7 @@ export default function MoreMenuScreen() {
         );
       })
       .sort((a, b) => b.ovr_current - a.ovr_current);
-  }, [players, tlPlayerPickerSearch]);
+  }, [players, tlPlayerPickerSearch, tlPlayerPickerPosCat, matchPosCategory]);
 
   if (profileLoading) {
     return (
@@ -392,6 +416,8 @@ export default function MoreMenuScreen() {
     setWOvrMax('83');
     setWCatatan(presetPlayer ? `Pengganti ${presetPlayer.nama} yang akan dilepas` : '');
     setWTerkaitPlayerId(presetPlayer ? presetPlayer.id : null);
+    setPlayerPickerSearch('');
+    setWPlayerPickerPosCat('ALL');
     setShowWatchModal(true);
   }
 
@@ -404,6 +430,8 @@ export default function MoreMenuScreen() {
     setWOvrMax(item.target_ovr_max ? String(item.target_ovr_max) : '');
     setWCatatan(item.catatan ?? '');
     setWTerkaitPlayerId(item.terkait_player_id ?? null);
+    setPlayerPickerSearch('');
+    setWPlayerPickerPosCat('ALL');
     setShowWatchModal(true);
   }
 
@@ -484,6 +512,7 @@ export default function MoreMenuScreen() {
     setTlIsOpsiBeli(false);
     setTlCatatan('');
     setTlPlayerPickerSearch('');
+    setTlPlayerPickerPosCat('ALL');
     setShowAddTlModal(true);
   }
 
@@ -498,6 +527,7 @@ export default function MoreMenuScreen() {
     const cleanNote = (player.status_catatan ?? '').replace('[OPSI BELI] ', '').replace('[OPSI BELI]', '');
     setTlCatatan(cleanNote);
     setTlPlayerPickerSearch('');
+    setTlPlayerPickerPosCat('ALL');
     setShowAddTlModal(true);
   }
 
@@ -1900,7 +1930,7 @@ export default function MoreMenuScreen() {
         onRequestClose={() => setShowWatchModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowWatchModal(false)}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.modalCenter}>
             <Pressable style={styles.formModalCard} onPress={(e) => e.stopPropagation()}>
               {/* VIEW 1: FORM */}
@@ -1974,6 +2004,7 @@ export default function MoreMenuScreen() {
                       style={styles.selectorTriggerBtn}
                       onPress={() => {
                         setPlayerPickerSearch('');
+                        setWPlayerPickerPosCat('ALL');
                         setWModalView('pick_player');
                       }}
                       activeOpacity={0.8}>
@@ -2161,7 +2192,8 @@ export default function MoreMenuScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  <View style={[styles.wSearchRow, { marginHorizontal: 0, marginBottom: 10 }]}>
+                  {/* Search Bar */}
+                  <View style={[styles.wSearchRow, { marginHorizontal: 0, marginBottom: 8 }]}>
                     <TextInput
                       style={styles.wSearchInput}
                       placeholder="🔍 Cari pemain berdasarkan nama/posisi..."
@@ -2178,7 +2210,38 @@ export default function MoreMenuScreen() {
                     )}
                   </View>
 
-                  <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                  {/* Category Quick Filter */}
+                  <View style={styles.pickerPosFilterRow}>
+                    {(['ALL', 'GK', 'DEF', 'MID', 'ATT'] as const).map((cat) => {
+                      const isSel = wPlayerPickerPosCat === cat;
+                      const label =
+                        cat === 'ALL'
+                          ? 'Semua'
+                          : cat === 'GK'
+                          ? '🧤 GK'
+                          : cat === 'DEF'
+                          ? '🛡️ Bek'
+                          : cat === 'MID'
+                          ? '⚙️ Mid'
+                          : '⚡ Att';
+                      return (
+                        <TouchableOpacity
+                          key={cat}
+                          style={[styles.pickerPosFilterChip, isSel && styles.pickerPosFilterChipActive]}
+                          onPress={() => setWPlayerPickerPosCat(cat)}>
+                          <Text
+                            style={[
+                              styles.pickerPosFilterChipText,
+                              isSel && styles.pickerPosFilterChipTextActive,
+                            ]}>
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                     {/* Option: Tanpa Pengganti */}
                     <TouchableOpacity
                       style={[
@@ -2210,52 +2273,58 @@ export default function MoreMenuScreen() {
                     </TouchableOpacity>
 
                     {/* List of squad players */}
-                    {pickerFilteredPlayers.map((p) => {
-                      const isSelected = wTerkaitPlayerId === p.id;
-                      const primaryPos = p.positions[0]?.nama ?? '-';
-                      const isAkanDijual = p.status === 'akan_dijual';
+                    {pickerFilteredPlayers.length === 0 ? (
+                      <View style={{ padding: 20, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, color: '#888' }}>Pemain tidak ditemukan</Text>
+                      </View>
+                    ) : (
+                      pickerFilteredPlayers.map((p) => {
+                        const isSelected = wTerkaitPlayerId === p.id;
+                        const primaryPos = p.positions[0]?.nama ?? '-';
+                        const isAkanDijual = p.status === 'akan_dijual';
 
-                      return (
-                        <TouchableOpacity
-                          key={p.id}
-                          style={[
-                            styles.playerPickerItem,
-                            isSelected && styles.playerPickerItemActive,
-                            isAkanDijual && styles.playerPickerItemRecommended,
-                          ]}
-                          onPress={() => {
-                            setWTerkaitPlayerId(p.id);
-                            setWModalView('form');
-                          }}>
-                          <View style={styles.playerPickerItemLeft}>
-                            <View style={styles.playerPickerOvrBadge}>
-                              <Text style={styles.playerPickerOvrText}>{p.ovr_current}</Text>
-                              <Text style={styles.playerPickerPosText}>{primaryPos}</Text>
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text
-                                  style={[
-                                    styles.playerPickerName,
-                                    isSelected && styles.playerPickerNameActive,
-                                  ]}>
-                                  {p.nama}
-                                </Text>
-                                {isAkanDijual && (
-                                  <View style={styles.akanDijualTag}>
-                                    <Text style={styles.akanDijualTagText}>AKAN DIJUAL</Text>
-                                  </View>
-                                )}
+                        return (
+                          <TouchableOpacity
+                            key={p.id}
+                            style={[
+                              styles.playerPickerItem,
+                              isSelected && styles.playerPickerItemActive,
+                              isAkanDijual && styles.playerPickerItemRecommended,
+                            ]}
+                            onPress={() => {
+                              setWTerkaitPlayerId(p.id);
+                              setWModalView('form');
+                            }}>
+                            <View style={styles.playerPickerItemLeft}>
+                              <View style={styles.playerPickerOvrBadge}>
+                                <Text style={styles.playerPickerOvrText}>{p.ovr_current}</Text>
+                                <Text style={styles.playerPickerPosText}>{primaryPos}</Text>
                               </View>
-                              <Text style={styles.playerPickerSub}>
-                                Posisi: {p.positions.map((pos) => pos.nama).join(', ')} • Status: {p.status.toUpperCase()}
-                              </Text>
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  <Text
+                                    style={[
+                                      styles.playerPickerName,
+                                      isSelected && styles.playerPickerNameActive,
+                                    ]}>
+                                    {p.nama}
+                                  </Text>
+                                  {isAkanDijual && (
+                                    <View style={styles.akanDijualTag}>
+                                      <Text style={styles.akanDijualTagText}>AKAN DIJUAL</Text>
+                                    </View>
+                                  )}
+                                </View>
+                                <Text style={styles.playerPickerSub}>
+                                  Posisi: {p.positions.map((pos) => pos.nama).join(', ')} • Status: {p.status.toUpperCase()}
+                                </Text>
+                              </View>
                             </View>
-                          </View>
-                          {isSelected && <Text style={styles.playerPickerCheck}>✓</Text>}
-                        </TouchableOpacity>
-                      );
-                    })}
+                            {isSelected && <Text style={styles.playerPickerCheck}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
                   </ScrollView>
 
                   <TouchableOpacity
@@ -2278,7 +2347,7 @@ export default function MoreMenuScreen() {
         onRequestClose={() => setShowAddTlModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowAddTlModal(false)}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.modalCenter}>
             <Pressable style={styles.formModalCard} onPress={(e) => e.stopPropagation()}>
               {/* VIEW 1: FORM INPUT */}
@@ -2301,6 +2370,7 @@ export default function MoreMenuScreen() {
                       onPress={() => {
                         if (tlEditPlayerTarget) return; // cannot change player in edit mode
                         setTlPlayerPickerSearch('');
+                        setTlPlayerPickerPosCat('ALL');
                         setTlModalView('pick_player');
                       }}
                       disabled={tlEditPlayerTarget !== null}
@@ -2473,7 +2543,8 @@ export default function MoreMenuScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  <View style={[styles.wSearchRow, { marginHorizontal: 0, marginBottom: 10 }]}>
+                  {/* Search Bar */}
+                  <View style={[styles.wSearchRow, { marginHorizontal: 0, marginBottom: 8 }]}>
                     <TextInput
                       style={styles.wSearchInput}
                       placeholder="🔍 Cari nama pemain atau posisi..."
@@ -2491,7 +2562,38 @@ export default function MoreMenuScreen() {
                     )}
                   </View>
 
-                  <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                  {/* Category Quick Filter */}
+                  <View style={styles.pickerPosFilterRow}>
+                    {(['ALL', 'GK', 'DEF', 'MID', 'ATT'] as const).map((cat) => {
+                      const isSel = tlPlayerPickerPosCat === cat;
+                      const label =
+                        cat === 'ALL'
+                          ? 'Semua'
+                          : cat === 'GK'
+                          ? '🧤 GK'
+                          : cat === 'DEF'
+                          ? '🛡️ Bek'
+                          : cat === 'MID'
+                          ? '⚙️ Mid'
+                          : '⚡ Att';
+                      return (
+                        <TouchableOpacity
+                          key={cat}
+                          style={[styles.pickerPosFilterChip, isSel && styles.pickerPosFilterChipActive]}
+                          onPress={() => setTlPlayerPickerPosCat(cat)}>
+                          <Text
+                            style={[
+                              styles.pickerPosFilterChipText,
+                              isSel && styles.pickerPosFilterChipTextActive,
+                            ]}>
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                     {availableSquadPlayersForTl.length === 0 ? (
                       <View style={{ padding: 20, alignItems: 'center' }}>
                         <Text style={{ fontSize: 12, color: '#888' }}>Pemain tidak ditemukan</Text>
@@ -4267,6 +4369,8 @@ const styles = StyleSheet.create({
   },
   modalCenter: {
     width: '100%',
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   formModalCard: {
@@ -4276,11 +4380,37 @@ const styles = StyleSheet.create({
     padding: 18,
     width: '90%',
     maxWidth: 420,
+    maxHeight: '85%',
     shadowColor: '#000',
     shadowOffset: { width: 6, height: 6 },
     shadowOpacity: 1,
     shadowRadius: 0,
     elevation: 8,
+  },
+  pickerPosFilterRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: 8,
+  },
+  pickerPosFilterChip: {
+    flex: 1,
+    paddingVertical: 6,
+    backgroundColor: '#F0F0F0',
+    borderWidth: 1.5,
+    borderColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerPosFilterChipActive: {
+    backgroundColor: '#0A1128',
+  },
+  pickerPosFilterChipText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#0A1128',
+  },
+  pickerPosFilterChipTextActive: {
+    color: '#D4AF37',
   },
   modalTitle: {
     fontSize: 15,
