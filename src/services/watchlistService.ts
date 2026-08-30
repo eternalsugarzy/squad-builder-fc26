@@ -15,6 +15,7 @@ export interface WatchlistWithDetails extends TransferWatchlist {
 
 export interface CreateWatchlistInput {
   profile_id: string;
+  nama_target?: string | null;
   position_id: string;
   target_ovr_min?: number | null;
   target_ovr_max?: number | null;
@@ -23,6 +24,7 @@ export interface CreateWatchlistInput {
 }
 
 export interface UpdateWatchlistInput {
+  nama_target?: string | null;
   position_id: string;
   target_ovr_min?: number | null;
   target_ovr_max?: number | null;
@@ -62,11 +64,12 @@ export async function createWatchlist(input: CreateWatchlistInput): Promise<Watc
 
   await db.runAsync(
     `INSERT INTO transfer_watchlist (
-      id, profile_id, position_id, target_ovr_min, target_ovr_max,
+      id, profile_id, nama_target, position_id, target_ovr_min, target_ovr_max,
       catatan, terkait_player_id, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.profile_id,
+    input.nama_target?.trim() || null,
     input.position_id,
     input.target_ovr_min ?? null,
     input.target_ovr_max ?? null,
@@ -89,12 +92,14 @@ export async function updateWatchlist(id: string, input: UpdateWatchlistInput): 
 
   await db.runAsync(
     `UPDATE transfer_watchlist SET
+      nama_target = ?,
       position_id = ?,
       target_ovr_min = ?,
       target_ovr_max = ?,
       catatan = ?,
       terkait_player_id = ?
      WHERE id = ?`,
+    input.nama_target?.trim() || null,
     input.position_id,
     input.target_ovr_min ?? null,
     input.target_ovr_max ?? null,

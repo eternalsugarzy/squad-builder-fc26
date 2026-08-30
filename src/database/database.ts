@@ -57,6 +57,15 @@ async function runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
       await database.execAsync(sql);
     }
 
+    // Specific migration steps
+    if (currentVersion > 0 && currentVersion < 2) {
+      try {
+        await database.execAsync('ALTER TABLE transfer_watchlist ADD COLUMN nama_target TEXT;');
+      } catch (e) {
+        // column may already exist
+      }
+    }
+
     // Update schema version
     if (currentVersion === 0) {
       await database.runAsync(

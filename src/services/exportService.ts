@@ -52,6 +52,7 @@ export interface ProfileExportData {
     bench: string[]; // array of player names
   }[];
   watchlist: {
+    nama_target?: string | null;
     position_nama: string;
     target_ovr_min?: number | null;
     target_ovr_max?: number | null;
@@ -120,6 +121,7 @@ export async function exportProfileToJson(profileId: string): Promise<string> {
       bench: sq.bench.map((b) => b.nama),
     })),
     watchlist: watchlist.map((w) => ({
+      nama_target: w.nama_target,
       position_nama: w.position_nama,
       target_ovr_min: w.target_ovr_min,
       target_ovr_max: w.target_ovr_max,
@@ -307,10 +309,11 @@ export async function importProfileFromJson(jsonString: string): Promise<string>
     if (posId) {
       const wId = generateId();
       await db.runAsync(
-        `INSERT INTO transfer_watchlist (id, profile_id, position_id, target_ovr_min, target_ovr_max, catatan, terkait_player_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO transfer_watchlist (id, profile_id, nama_target, position_id, target_ovr_min, target_ovr_max, catatan, terkait_player_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         wId,
         profileId,
+        w.nama_target ?? null,
         posId,
         w.target_ovr_min ?? null,
         w.target_ovr_max ?? null,

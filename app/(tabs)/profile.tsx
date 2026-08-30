@@ -70,14 +70,25 @@ export default function MoreMenuScreen() {
   const [players, setPlayers] = useState<PlayerWithPositions[]>([]);
   const [wLoading, setWLoading] = useState(false);
 
-  // Watchlist Add/Edit Modal State
+  // Watchlist Filter State in List
+  const [wSearchQuery, setWSearchQuery] = useState('');
+  const [wFilterPos, setWFilterPos] = useState('ALL');
+  const [showWFilterPosModal, setShowWFilterPosModal] = useState(false);
+
+  // Watchlist Add/Edit Form State
   const [showWatchModal, setShowWatchModal] = useState(false);
   const [watchEditTarget, setWatchEditTarget] = useState<WatchlistWithDetails | null>(null);
+  const [wNamaTarget, setWNamaTarget] = useState('');
   const [wPosId, setWPosId] = useState('');
   const [wOvrMin, setWOvrMin] = useState('');
   const [wOvrMax, setWOvrMax] = useState('');
   const [wCatatan, setWCatatan] = useState('');
   const [wTerkaitPlayerId, setWTerkaitPlayerId] = useState<string | null>(null);
+
+  // Pickers Modals inside Watchlist Form (No more horizontal scrolling)
+  const [showPosPickerModal, setShowPosPickerModal] = useState(false);
+  const [showPlayerPickerModal, setShowPlayerPickerModal] = useState(false);
+  const [playerPickerSearch, setPlayerPickerSearch] = useState('');
 
   const loadData = useCallback(async () => {
     if (!activeProfile) return;
@@ -106,6 +117,73 @@ export default function MoreMenuScreen() {
   const soldPlayers = useMemo(() => {
     return players.filter((p) => p.status === 'sudah_dijual');
   }, [players]);
+
+  // Categorized Positions for Modals
+  const gkPositions = useMemo(() => positions.filter((p) => p.nama.toUpperCase() === 'GK'), [positions]);
+  const defPositions = useMemo(
+    () => positions.filter((p) => ['LB', 'LWB', 'CB', 'RB', 'RWB'].includes(p.nama.toUpperCase())),
+    [positions]
+  );
+  const midPositions = useMemo(
+    () => positions.filter((p) => ['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(p.nama.toUpperCase())),
+    [positions]
+  );
+  const attPositions = useMemo(
+    () =>
+      positions.filter((p) => ['LW', 'RW', 'LF', 'RF', 'CF', 'ST'].includes(p.nama.toUpperCase())),
+    [positions]
+  );
+  const otherPositions = useMemo(
+    () =>
+      positions.filter(
+        (p) =>
+          !['GK', 'LB', 'LWB', 'CB', 'RB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'LF', 'RF', 'CF', 'ST'].includes(
+            p.nama.toUpperCase()
+          )
+      ),
+    [positions]
+  );
+
+  // Filtered Watchlist in List View
+  const filteredWatchlist = useMemo(() => {
+    return watchlist.filter((item) => {
+      if (wFilterPos !== 'ALL' && item.position_id !== wFilterPos) return false;
+      if (wSearchQuery.trim()) {
+        const q = wSearchQuery.toLowerCase();
+        const matchName = item.nama_target?.toLowerCase().includes(q);
+        const matchPos = item.position_nama?.toLowerCase().includes(q);
+        const matchTerkait = item.terkait_player_nama?.toLowerCase().includes(q);
+        const matchNote = item.catatan?.toLowerCase().includes(q);
+        if (!matchName && !matchPos && !matchTerkait && !matchNote) return false;
+      }
+      return true;
+    });
+  }, [watchlist, wFilterPos, wSearchQuery]);
+
+  // Selected details for Form Display
+  const selectedFormPos = positions.find((p) => p.id === wPosId);
+  const selectedFormPlayer = players.find((p) => p.id === wTerkaitPlayerId);
+  const selectedFilterPosObj = positions.find((p) => p.id === wFilterPos);
+
+  // Filtered players inside Player Replacement Picker Modal
+  const pickerFilteredPlayers = useMemo(() => {
+    return players
+      .filter((p) => p.status !== 'sudah_dijual')
+      .filter((p) => {
+        if (!playerPickerSearch.trim()) return true;
+        const q = playerPickerSearch.toLowerCase();
+        return (
+          p.nama.toLowerCase().includes(q) ||
+          p.positions.some((pos) => pos.nama.toLowerCase().includes(q))
+        );
+      })
+      .sort((a, b) => {
+        // Show 'akan_dijual' first as recommendation
+        if (a.status === 'akan_dijual' && b.status !== 'akan_dijual') return -1;
+        if (b.status === 'akan_dijual' && a.status !== 'akan_dijual') return 1;
+        return b.ovr_current - a.ovr_current;
+      });
+  }, [players, playerPickerSearch]);
 
   if (profileLoading) {
     return (
@@ -224,6 +302,7 @@ export default function MoreMenuScreen() {
   // ─── Watchlist Handlers ───────────────────────────
   function openAddWatchlist() {
     setWatchEditTarget(null);
+    setWNamaTarget('');
     setWPosId(positions[0]?.id ?? '');
     setWOvrMin('78');
     setWOvrMax('83');
@@ -234,6 +313,7 @@ export default function MoreMenuScreen() {
 
   function openEditWatchlist(item: WatchlistWithDetails) {
     setWatchEditTarget(item);
+    setWNamaTarget(item.nama_target ?? '');
     setWPosId(item.position_id);
     setWOvrMin(item.target_ovr_min ? String(item.target_ovr_min) : '');
     setWOvrMax(item.target_ovr_max ? String(item.target_ovr_max) : '');
@@ -260,6 +340,7 @@ export default function MoreMenuScreen() {
     try {
       if (watchEditTarget) {
         await updateWatchlist(watchEditTarget.id, {
+          nama_target: wNamaTarget.trim() || null,
           position_id: wPosId,
           target_ovr_min: minNum,
           target_ovr_max: maxNum,
@@ -269,6 +350,7 @@ export default function MoreMenuScreen() {
       } else {
         await createWatchlist({
           profile_id: activeProfile.id,
+          nama_target: wNamaTarget.trim() || null,
           position_id: wPosId,
           target_ovr_min: minNum,
           target_ovr_max: maxNum,
@@ -286,7 +368,7 @@ export default function MoreMenuScreen() {
   function handleDeleteWatchlist(item: WatchlistWithDetails) {
     Alert.alert(
       'Hapus Target',
-      `Hapus target transfer posisi ${item.position_nama}?`,
+      `Hapus target transfer ${item.nama_target || item.position_nama}?`,
       [
         { text: 'Batal', style: 'cancel' },
         {
@@ -422,7 +504,7 @@ export default function MoreMenuScreen() {
                     </View>
                   </View>
                   <Text style={styles.menuCardDesc}>
-                    Pantau target posisi transfer, range target OVR, dan pengganti pemain.
+                    Catat nama pemain incaran, posisi target, target range OVR, dan pengganti pemain.
                   </Text>
                 </View>
               </View>
@@ -587,71 +669,193 @@ export default function MoreMenuScreen() {
 
           {/* ─── 2. WATCHLIST SECTION ──────────────────── */}
           {activeMenu === 'watchlist' && (
-            <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-              <View style={styles.subSectionHeader}>
-                <Text style={styles.subSectionTitle}>TARGET TRANSFER ({watchlist.length})</Text>
-                <TouchableOpacity
-                  style={styles.subSectionActionBtn}
-                  onPress={openAddWatchlist}>
-                  <Text style={styles.subSectionActionBtnText}>+ TAMBAH TARGET</Text>
-                </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              {/* Filter & Search Bar */}
+              <View style={styles.wFilterContainer}>
+                {/* Search Bar */}
+                <View style={styles.wSearchRow}>
+                  <TextInput
+                    style={styles.wSearchInput}
+                    placeholder="🔍 Cari nama target, posisi, pengganti..."
+                    placeholderTextColor="#888"
+                    value={wSearchQuery}
+                    onChangeText={setWSearchQuery}
+                    returnKeyType="search"
+                  />
+                  {wSearchQuery.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setWSearchQuery('')}
+                      style={styles.wSearchClearBtn}>
+                      <Text style={styles.wSearchClearText}>✕</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Filter & Add Button Row */}
+                <View style={styles.wFilterActionRow}>
+                  {/* Position Filter Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.wFilterBigBtn,
+                      wFilterPos !== 'ALL' && styles.wFilterBigBtnActive,
+                    ]}
+                    onPress={() => setShowWFilterPosModal(true)}
+                    activeOpacity={0.8}>
+                    <Text
+                      style={[
+                        styles.wFilterBigBtnText,
+                        wFilterPos !== 'ALL' && styles.wFilterBigBtnTextActive,
+                      ]}
+                      numberOfLines={1}>
+                      📍 POSISI: {wFilterPos === 'ALL' ? 'SEMUA' : selectedFilterPosObj?.nama ?? 'POSISI'} ▾
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Add Target Button */}
+                  <TouchableOpacity
+                    style={styles.wAddTargetBtn}
+                    onPress={openAddWatchlist}
+                    activeOpacity={0.8}>
+                    <Text style={styles.wAddTargetBtnText}>+ TAMBAH TARGET</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Active Filter Tags */}
+                {(wFilterPos !== 'ALL' || wSearchQuery.trim() !== '') && (
+                  <View style={styles.wActiveTagsRow}>
+                    <Text style={styles.wActiveTagHeader}>FILTER AKTIF:</Text>
+                    {wFilterPos !== 'ALL' && (
+                      <TouchableOpacity
+                        style={styles.wActiveTagChip}
+                        onPress={() => setWFilterPos('ALL')}>
+                        <Text style={styles.wActiveTagChipText}>
+                          POSISI: {selectedFilterPosObj?.nama ?? wFilterPos} ✕
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {wSearchQuery.trim() !== '' && (
+                      <TouchableOpacity
+                        style={styles.wActiveTagChip}
+                        onPress={() => setWSearchQuery('')}>
+                        <Text style={styles.wActiveTagChipText}>
+                          "{wSearchQuery}" ✕
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={styles.wResetFilterChip}
+                      onPress={() => {
+                        setWFilterPos('ALL');
+                        setWSearchQuery('');
+                      }}>
+                      <Text style={styles.wResetFilterChipText}>RESET</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
 
+              {/* Watchlist List */}
               {wLoading ? (
-                <ActivityIndicator size="large" color="#0A1128" style={{ marginTop: 24 }} />
-              ) : watchlist.length === 0 ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#0A1128" />
+                  <Text style={styles.loadingText}>Memuat target transfer...</Text>
+                </View>
+              ) : filteredWatchlist.length === 0 ? (
                 <View style={styles.emptyCard}>
-                  <Text style={styles.emptyTitle}>Belum Ada Target Transfer</Text>
-                  <Text style={styles.emptySub}>
-                    Catat posisi yang perlu dibeli, target range OVR, dan pemain yang ingin digantikan.
+                  <Text style={styles.emptyTitle}>
+                    {watchlist.length === 0 ? 'Belum Ada Target Transfer' : 'Target Tidak Ditemukan'}
                   </Text>
+                  <Text style={styles.emptySub}>
+                    {watchlist.length === 0
+                      ? 'Catat nama pemain yang ingin dibeli, target range OVR, dan pemain skuad yang akan digantikan.'
+                      : 'Coba ganti filter posisi atau kata kunci pencarian.'}
+                  </Text>
+                  {(wFilterPos !== 'ALL' || wSearchQuery.trim() !== '') && (
+                    <TouchableOpacity
+                      style={styles.emptyResetBtn}
+                      onPress={() => {
+                        setWFilterPos('ALL');
+                        setWSearchQuery('');
+                      }}>
+                      <Text style={styles.emptyResetBtnText}>RESET FILTER</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ) : (
-                watchlist.map((item) => (
-                  <View key={item.id} style={styles.watchCard}>
-                    <View style={styles.watchCardTop}>
-                      <View style={styles.watchPosBadge}>
-                        <Text style={styles.watchPosBadgeText}>{item.position_nama}</Text>
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={styles.watchTargetOvr}>
-                          Target OVR:{' '}
-                          {item.target_ovr_min && item.target_ovr_max
-                            ? `${item.target_ovr_min} – ${item.target_ovr_max}`
-                            : item.target_ovr_min
-                            ? `Min ${item.target_ovr_min}`
-                            : 'Bebas'}
-                        </Text>
-                        {item.terkait_player_nama && (
-                          <Text style={styles.watchReplace}>
-                            Gantikan: {item.terkait_player_nama} ({item.terkait_player_ovr ?? '-'})
+                <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+                  <Text style={styles.wCountSummary}>
+                    MENAMPILKAN {filteredWatchlist.length} DARI {watchlist.length} TARGET TRANSFER
+                  </Text>
+
+                  {filteredWatchlist.map((item) => (
+                    <View key={item.id} style={styles.watchCard}>
+                      {/* Top Header: Target Name & Position Badge */}
+                      <View style={styles.watchCardTop}>
+                        <View style={styles.watchPosBadge}>
+                          <Text style={styles.watchPosBadgeText}>{item.position_nama}</Text>
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={styles.watchPlayerNameHeader}>
+                            {item.nama_target ? item.nama_target : `Target Pemain (${item.position_nama})`}
                           </Text>
-                        )}
+                          <View style={styles.watchTargetOvrBadge}>
+                            <Text style={styles.watchTargetOvrBadgeText}>
+                              TARGET OVR:{' '}
+                              {item.target_ovr_min && item.target_ovr_max
+                                ? `${item.target_ovr_min} – ${item.target_ovr_max}`
+                                : item.target_ovr_min
+                                ? `Min ${item.target_ovr_min}`
+                                : item.target_ovr_max
+                                ? `Max ${item.target_ovr_max}`
+                                : 'Bebas'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Replacement Player Row */}
+                      {item.terkait_player_nama ? (
+                        <View style={styles.watchReplaceBox}>
+                          <Text style={styles.watchReplaceLabel}>🔄 AKAN MENGGANTIKAN:</Text>
+                          <Text style={styles.watchReplaceValue}>
+                            {item.terkait_player_nama} (OVR {item.terkait_player_ovr ?? '-'})
+                            {item.terkait_player_status === 'akan_dijual' && ' • [AKAN DIJUAL]'}
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.watchNoReplaceBox}>
+                          <Text style={styles.watchNoReplaceText}>
+                            ➕ Tambahan Skuad (Tanpa Menggantikan Pemain)
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Notes Box */}
+                      {item.catatan ? (
+                        <View style={styles.watchNoteBox}>
+                          <Text style={styles.watchNoteLabel}>📝 Catatan:</Text>
+                          <Text style={styles.watchNoteText}>"{item.catatan}"</Text>
+                        </View>
+                      ) : null}
+
+                      {/* Actions */}
+                      <View style={styles.watchActions}>
+                        <TouchableOpacity
+                          style={styles.watchEditBtn}
+                          onPress={() => openEditWatchlist(item)}>
+                          <Text style={styles.watchEditBtnText}>✏️ Edit Target</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.watchDeleteBtn}
+                          onPress={() => handleDeleteWatchlist(item)}>
+                          <Text style={styles.watchDeleteBtnText}>🗑️ Hapus</Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
-
-                    {item.catatan ? (
-                      <View style={styles.watchNoteBox}>
-                        <Text style={styles.watchNoteText}>"{item.catatan}"</Text>
-                      </View>
-                    ) : null}
-
-                    <View style={styles.watchActions}>
-                      <TouchableOpacity
-                        style={styles.watchEditBtn}
-                        onPress={() => openEditWatchlist(item)}>
-                        <Text style={styles.watchEditBtnText}>✏️ Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.watchDeleteBtn}
-                        onPress={() => handleDeleteWatchlist(item)}>
-                        <Text style={styles.watchDeleteBtnText}>🗑️ Hapus</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))
+                  ))}
+                </ScrollView>
               )}
-            </ScrollView>
+            </View>
           )}
 
           {/* ─── 3. PEMAIN TERJUAL SECTION ─────────────── */}
@@ -895,7 +1099,7 @@ export default function MoreMenuScreen() {
         </Pressable>
       </Modal>
 
-      {/* ─── ADD/EDIT WATCHLIST MODAL ───────────────── */}
+      {/* ─── ADD/EDIT WATCHLIST MODAL (REVAMPED CLEAN FORM) ── */}
       <Modal
         visible={showWatchModal}
         transparent
@@ -907,101 +1111,106 @@ export default function MoreMenuScreen() {
             style={styles.modalCenter}>
             <Pressable style={styles.formModalCard} onPress={(e) => e.stopPropagation()}>
               <Text style={styles.modalTitle}>
-                {watchEditTarget ? 'EDIT TARGET TRANSFER' : 'TAMBAH TARGET TRANSFER'}
+                {watchEditTarget ? '✏️ EDIT TARGET TRANSFER' : '🎯 TAMBAH TARGET TRANSFER'}
               </Text>
 
-              <Text style={styles.fieldLabel}>PILIH POSISI TARGET:</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                  {positions.map((p) => (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={[styles.posSelectChip, wPosId === p.id && styles.posSelectChipActive]}
-                      onPress={() => setWPosId(p.id)}>
-                      <Text
-                        style={[
-                          styles.posSelectChipText,
-                          wPosId === p.id && styles.posSelectChipTextActive,
-                        ]}>
-                        {p.nama}
+              <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+                {/* Field 1: Nama Pemain Target */}
+                <Text style={styles.fieldLabel}>NAMA PEMAIN TARGET (MISAL: F. WIRTZ / MBAPPÉ):</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Masukkan nama target transfer..."
+                  placeholderTextColor="#999"
+                  value={wNamaTarget}
+                  onChangeText={setWNamaTarget}
+                />
+
+                {/* Field 2: Posisi Target (Large Trigger Button) */}
+                <Text style={styles.fieldLabel}>POSISI TARGET:</Text>
+                <TouchableOpacity
+                  style={styles.selectorTriggerBtn}
+                  onPress={() => setShowPosPickerModal(true)}
+                  activeOpacity={0.8}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={styles.selectorTriggerBadge}>
+                      <Text style={styles.selectorTriggerBadgeText}>
+                        {selectedFormPos?.nama ?? 'POSISI'}
                       </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.fieldLabel}>OVR MIN:</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="78"
-                    placeholderTextColor="#999"
-                    value={wOvrMin}
-                    onChangeText={setWOvrMin}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.fieldLabel}>OVR MAX:</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="84"
-                    placeholderTextColor="#999"
-                    value={wOvrMax}
-                    onChangeText={setWOvrMax}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                  />
-                </View>
-              </View>
-
-              <Text style={styles.fieldLabel}>TARGET PENGGANTI PEMAIN (OPSIONAL):</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                  <TouchableOpacity
-                    style={[styles.posSelectChip, wTerkaitPlayerId === null && styles.posSelectChipActive]}
-                    onPress={() => setWTerkaitPlayerId(null)}>
-                    <Text
-                      style={[
-                        styles.posSelectChipText,
-                        wTerkaitPlayerId === null && styles.posSelectChipTextActive,
-                      ]}>
-                      Tanpa Pengganti
+                    </View>
+                    <Text style={styles.selectorTriggerText}>
+                      {selectedFormPos ? `Posisi: ${selectedFormPos.nama}` : 'Pilih Posisi'}
                     </Text>
-                  </TouchableOpacity>
-                  {players
-                    .filter((p) => p.status === 'akan_dijual' || p.status === 'aktif')
-                    .map((p) => (
-                      <TouchableOpacity
-                        key={p.id}
-                        style={[
-                          styles.posSelectChip,
-                          wTerkaitPlayerId === p.id && styles.posSelectChipActive,
-                        ]}
-                        onPress={() => setWTerkaitPlayerId(p.id)}>
-                        <Text
-                          style={[
-                            styles.posSelectChipText,
-                            wTerkaitPlayerId === p.id && styles.posSelectChipTextActive,
-                          ]}>
-                          {p.nama} ({p.ovr_current})
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                </View>
-              </ScrollView>
+                  </View>
+                  <Text style={styles.selectorTriggerArrow}>UBAH ▾</Text>
+                </TouchableOpacity>
 
-              <Text style={styles.fieldLabel}>CATATAN TARGET:</Text>
-              <TextInput
-                style={[styles.modalInput, { height: 60 }]}
-                placeholder="misal: Butuh gelandang dengan visi umpan tinggi"
-                placeholderTextColor="#999"
-                value={wCatatan}
-                onChangeText={setWCatatan}
-                multiline
-              />
+                {/* Field 3: Target OVR Range */}
+                <View style={{ flexDirection: 'row', gap: 10, marginVertical: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fieldLabel}>OVR MIN:</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="78"
+                      placeholderTextColor="#999"
+                      value={wOvrMin}
+                      onChangeText={setWOvrMin}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fieldLabel}>OVR MAX:</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="84"
+                      placeholderTextColor="#999"
+                      value={wOvrMax}
+                      onChangeText={setWOvrMax}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                    />
+                  </View>
+                </View>
+
+                {/* Field 4: Pemain yang Akan Digantikan (Large Trigger Button) */}
+                <Text style={styles.fieldLabel}>AKAN MENGGANTIKAN PEMAIN (OPSIONAL):</Text>
+                <TouchableOpacity
+                  style={styles.selectorTriggerBtn}
+                  onPress={() => {
+                    setPlayerPickerSearch('');
+                    setShowPlayerPickerModal(true);
+                  }}
+                  activeOpacity={0.8}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <View
+                      style={[
+                        styles.selectorTriggerBadge,
+                        { backgroundColor: selectedFormPlayer ? '#0A1128' : '#666' },
+                      ]}>
+                      <Text style={styles.selectorTriggerBadgeText}>
+                        {selectedFormPlayer ? `OVR ${selectedFormPlayer.ovr_current}` : 'SKUAD'}
+                      </Text>
+                    </View>
+                    <Text style={styles.selectorTriggerText} numberOfLines={1}>
+                      {selectedFormPlayer
+                        ? `${selectedFormPlayer.nama} (${selectedFormPlayer.positions[0]?.nama ?? '-'})`
+                        : 'Tanpa Pengganti (Tambahan Skuad)'}
+                    </Text>
+                  </View>
+                  <Text style={styles.selectorTriggerArrow}>PILIH ▾</Text>
+                </TouchableOpacity>
+
+                {/* Field 5: Catatan Target */}
+                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>CATATAN TRANSFER:</Text>
+                <TextInput
+                  style={[styles.modalInput, { height: 65, textAlignVertical: 'top' }]}
+                  placeholder="misal: Klausul rilis, butuh playmaker pengganti, dll."
+                  placeholderTextColor="#999"
+                  value={wCatatan}
+                  onChangeText={setWCatatan}
+                  multiline
+                />
+              </ScrollView>
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
@@ -1010,11 +1219,452 @@ export default function MoreMenuScreen() {
                   <Text style={styles.modalCancelText}>BATAL</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleSaveWatchlist}>
-                  <Text style={styles.modalConfirmText}>SIMPAN</Text>
+                  <Text style={styles.modalConfirmText}>SIMPAN TARGET</Text>
                 </TouchableOpacity>
               </View>
             </Pressable>
           </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* ─── POSITION FILTER MODAL FOR WATCHLIST LIST ─ */}
+      <Modal
+        visible={showWFilterPosModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowWFilterPosModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowWFilterPosModal(false)}>
+          <View style={styles.filterModalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>FILTER POSISI TARGET TRANSFER</Text>
+              <TouchableOpacity onPress={() => setShowWFilterPosModal(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              {/* Option: Semua Posisi */}
+              <TouchableOpacity
+                style={[styles.posGroupAllBtn, wFilterPos === 'ALL' && styles.posGroupAllBtnActive]}
+                onPress={() => {
+                  setWFilterPos('ALL');
+                  setShowWFilterPosModal(false);
+                }}>
+                <Text style={[styles.posGroupAllText, wFilterPos === 'ALL' && styles.posGroupAllTextActive]}>
+                  🔘 SEMUA POSISI ({watchlist.length} Target)
+                </Text>
+              </TouchableOpacity>
+
+              {/* Group: Kiper */}
+              {gkPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>🧤 PENJAGA GAWANG</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {gkPositions.map((pos) => {
+                      const count = watchlist.filter((w) => w.position_id === pos.id).length;
+                      const isSelected = wFilterPos === pos.id;
+                      return (
+                        <TouchableOpacity
+                          key={pos.id}
+                          style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
+                          onPress={() => {
+                            setWFilterPos(pos.id);
+                            setShowWFilterPosModal(false);
+                          }}>
+                          <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
+                            {pos.nama}
+                          </Text>
+                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
+                            {count}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Group: Bek */}
+              {defPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>🛡️ BEK (DEFENDER)</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {defPositions.map((pos) => {
+                      const count = watchlist.filter((w) => w.position_id === pos.id).length;
+                      const isSelected = wFilterPos === pos.id;
+                      return (
+                        <TouchableOpacity
+                          key={pos.id}
+                          style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
+                          onPress={() => {
+                            setWFilterPos(pos.id);
+                            setShowWFilterPosModal(false);
+                          }}>
+                          <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
+                            {pos.nama}
+                          </Text>
+                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
+                            {count}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Group: Gelandang */}
+              {midPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>⚙️ GELANDANG (MIDFIELDER)</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {midPositions.map((pos) => {
+                      const count = watchlist.filter((w) => w.position_id === pos.id).length;
+                      const isSelected = wFilterPos === pos.id;
+                      return (
+                        <TouchableOpacity
+                          key={pos.id}
+                          style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
+                          onPress={() => {
+                            setWFilterPos(pos.id);
+                            setShowWFilterPosModal(false);
+                          }}>
+                          <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
+                            {pos.nama}
+                          </Text>
+                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
+                            {count}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Group: Penyerang */}
+              {attPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>⚡ PENYERANG (ATTACKER)</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {attPositions.map((pos) => {
+                      const count = watchlist.filter((w) => w.position_id === pos.id).length;
+                      const isSelected = wFilterPos === pos.id;
+                      return (
+                        <TouchableOpacity
+                          key={pos.id}
+                          style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
+                          onPress={() => {
+                            setWFilterPos(pos.id);
+                            setShowWFilterPosModal(false);
+                          }}>
+                          <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
+                            {pos.nama}
+                          </Text>
+                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
+                            {count}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Other positions */}
+              {otherPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>LAINNYA</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {otherPositions.map((pos) => {
+                      const count = watchlist.filter((w) => w.position_id === pos.id).length;
+                      const isSelected = wFilterPos === pos.id;
+                      return (
+                        <TouchableOpacity
+                          key={pos.id}
+                          style={[styles.bigPosChip, isSelected && styles.bigPosChipActive]}
+                          onPress={() => {
+                            setWFilterPos(pos.id);
+                            setShowWFilterPosModal(false);
+                          }}>
+                          <Text style={[styles.bigPosChipName, isSelected && styles.bigPosChipNameActive]}>
+                            {pos.nama}
+                          </Text>
+                          <Text style={[styles.bigPosChipCount, isSelected && styles.bigPosChipCountActive]}>
+                            {count}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalBottomBtn}
+              onPress={() => setShowWFilterPosModal(false)}>
+              <Text style={styles.modalBottomBtnText}>TUTUP</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ─── POSITION PICKER MODAL FOR WATCHLIST FORM ── */}
+      <Modal
+        visible={showPosPickerModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPosPickerModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowPosPickerModal(false)}>
+          <View style={styles.filterModalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>PILIH POSISI TARGET TRANSFER</Text>
+              <TouchableOpacity onPress={() => setShowPosPickerModal(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              {/* Group: Kiper */}
+              {gkPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>🧤 PENJAGA GAWANG</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {gkPositions.map((pos) => (
+                      <TouchableOpacity
+                        key={pos.id}
+                        style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
+                        onPress={() => {
+                          setWPosId(pos.id);
+                          setShowPosPickerModal(false);
+                        }}>
+                        <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
+                          {pos.nama}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Group: Bek */}
+              {defPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>🛡️ BEK (DEFENDER)</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {defPositions.map((pos) => (
+                      <TouchableOpacity
+                        key={pos.id}
+                        style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
+                        onPress={() => {
+                          setWPosId(pos.id);
+                          setShowPosPickerModal(false);
+                        }}>
+                        <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
+                          {pos.nama}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Group: Gelandang */}
+              {midPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>⚙️ GELANDANG (MIDFIELDER)</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {midPositions.map((pos) => (
+                      <TouchableOpacity
+                        key={pos.id}
+                        style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
+                        onPress={() => {
+                          setWPosId(pos.id);
+                          setShowPosPickerModal(false);
+                        }}>
+                        <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
+                          {pos.nama}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Group: Penyerang */}
+              {attPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>⚡ PENYERANG (ATTACKER)</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {attPositions.map((pos) => (
+                      <TouchableOpacity
+                        key={pos.id}
+                        style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
+                        onPress={() => {
+                          setWPosId(pos.id);
+                          setShowPosPickerModal(false);
+                        }}>
+                        <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
+                          {pos.nama}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Other positions */}
+              {otherPositions.length > 0 && (
+                <View style={styles.posCategorySection}>
+                  <Text style={styles.posCategoryHeader}>LAINNYA</Text>
+                  <View style={styles.posCategoryGrid}>
+                    {otherPositions.map((pos) => (
+                      <TouchableOpacity
+                        key={pos.id}
+                        style={[styles.bigPosChip, wPosId === pos.id && styles.bigPosChipActive]}
+                        onPress={() => {
+                          setWPosId(pos.id);
+                          setShowPosPickerModal(false);
+                        }}>
+                        <Text style={[styles.bigPosChipName, wPosId === pos.id && styles.bigPosChipNameActive]}>
+                          {pos.nama}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalBottomBtn}
+              onPress={() => setShowPosPickerModal(false)}>
+              <Text style={styles.modalBottomBtnText}>TUTUP</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ─── PLAYER REPLACEMENT PICKER MODAL FOR WATCHLIST ─ */}
+      <Modal
+        visible={showPlayerPickerModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPlayerPickerModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowPlayerPickerModal(false)}>
+          <View style={styles.filterModalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>PILIH PEMAIN YANG AKAN DIGANTIKAN</Text>
+              <TouchableOpacity onPress={() => setShowPlayerPickerModal(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Bar for Player Picker */}
+            <View style={[styles.wSearchRow, { marginHorizontal: 0, marginBottom: 10 }]}>
+              <TextInput
+                style={styles.wSearchInput}
+                placeholder="🔍 Cari pemain berdasarkan nama/posisi..."
+                placeholderTextColor="#888"
+                value={playerPickerSearch}
+                onChangeText={setPlayerPickerSearch}
+              />
+              {playerPickerSearch.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setPlayerPickerSearch('')}
+                  style={styles.wSearchClearBtn}>
+                  <Text style={styles.wSearchClearText}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              {/* Option: Tanpa Pengganti */}
+              <TouchableOpacity
+                style={[
+                  styles.playerPickerItem,
+                  wTerkaitPlayerId === null && styles.playerPickerItemActive,
+                ]}
+                onPress={() => {
+                  setWTerkaitPlayerId(null);
+                  setShowPlayerPickerModal(false);
+                }}>
+                <View style={styles.playerPickerItemLeft}>
+                  <View style={[styles.playerPickerOvrBadge, { backgroundColor: '#666' }]}>
+                    <Text style={styles.playerPickerOvrText}>-</Text>
+                  </View>
+                  <View>
+                    <Text
+                      style={[
+                        styles.playerPickerName,
+                        wTerkaitPlayerId === null && styles.playerPickerNameActive,
+                      ]}>
+                      Tanpa Pengganti
+                    </Text>
+                    <Text style={styles.playerPickerSub}>
+                      Target transfer ini sebagai tambahan skuad baru
+                    </Text>
+                  </View>
+                </View>
+                {wTerkaitPlayerId === null && <Text style={styles.playerPickerCheck}>✓</Text>}
+              </TouchableOpacity>
+
+              {/* List of squad players */}
+              {pickerFilteredPlayers.map((p) => {
+                const isSelected = wTerkaitPlayerId === p.id;
+                const primaryPos = p.positions[0]?.nama ?? '-';
+                const isAkanDijual = p.status === 'akan_dijual';
+
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[
+                      styles.playerPickerItem,
+                      isSelected && styles.playerPickerItemActive,
+                      isAkanDijual && styles.playerPickerItemRecommended,
+                    ]}
+                    onPress={() => {
+                      setWTerkaitPlayerId(p.id);
+                      setShowPlayerPickerModal(false);
+                    }}>
+                    <View style={styles.playerPickerItemLeft}>
+                      <View style={styles.playerPickerOvrBadge}>
+                        <Text style={styles.playerPickerOvrText}>{p.ovr_current}</Text>
+                        <Text style={styles.playerPickerPosText}>{primaryPos}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text
+                            style={[
+                              styles.playerPickerName,
+                              isSelected && styles.playerPickerNameActive,
+                            ]}>
+                            {p.nama}
+                          </Text>
+                          {isAkanDijual && (
+                            <View style={styles.akanDijualTag}>
+                              <Text style={styles.akanDijualTagText}>AKAN DIJUAL</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.playerPickerSub}>
+                          Posisi: {p.positions.map((pos) => pos.nama).join(', ')} • Status: {p.status.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                    {isSelected && <Text style={styles.playerPickerCheck}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalBottomBtn}
+              onPress={() => setShowPlayerPickerModal(false)}>
+              <Text style={styles.modalBottomBtnText}>TUTUP</Text>
+            </TouchableOpacity>
+          </View>
         </Pressable>
       </Modal>
 
@@ -1287,6 +1937,494 @@ const styles = StyleSheet.create({
     color: '#D4AF37',
   },
 
+  // Watchlist Filters
+  wFilterContainer: {
+    padding: 12,
+    backgroundColor: '#FAFAFA',
+    borderBottomWidth: 2,
+    borderBottomColor: '#000',
+    gap: 8,
+  },
+  wSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderWidth: 2,
+    borderColor: '#000',
+    paddingHorizontal: 10,
+    height: 42,
+  },
+  wSearchInput: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0A1128',
+  },
+  wSearchClearBtn: {
+    padding: 4,
+  },
+  wSearchClearText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#888',
+  },
+  wFilterActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  wFilterBigBtn: {
+    flex: 1,
+    height: 40,
+    backgroundColor: '#FFF',
+    borderWidth: 2,
+    borderColor: '#000',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
+  },
+  wFilterBigBtnActive: {
+    backgroundColor: '#0A1128',
+  },
+  wFilterBigBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#0A1128',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  wFilterBigBtnTextActive: {
+    color: '#D4AF37',
+  },
+  wAddTargetBtn: {
+    backgroundColor: '#D4AF37',
+    borderWidth: 2,
+    borderColor: '#000',
+    height: 40,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
+  },
+  wAddTargetBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 0.5,
+  },
+  wActiveTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  wActiveTagHeader: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#0A1128',
+  },
+  wActiveTagChip: {
+    backgroundColor: '#0A1128',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  wActiveTagChipText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#D4AF37',
+  },
+  wResetFilterChip: {
+    backgroundColor: '#C5221F',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  wResetFilterChipText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#FFF',
+  },
+  wCountSummary: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#666',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+
+  // Watchlist Card
+  watchCard: {
+    backgroundColor: '#FAFAFA',
+    borderWidth: 2.5,
+    borderColor: '#000',
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  watchCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  watchPosBadge: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#0A1128',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+  },
+  watchPosBadgeText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#D4AF37',
+  },
+  watchPlayerNameHeader: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0A1128',
+    letterSpacing: 0.5,
+  },
+  watchTargetOvrBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#D4AF37',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#000',
+    marginTop: 3,
+  },
+  watchTargetOvrBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#000',
+  },
+  watchReplaceBox: {
+    backgroundColor: '#FFF',
+    borderWidth: 1.5,
+    borderColor: '#B06000',
+    padding: 8,
+    marginBottom: 8,
+  },
+  watchReplaceLabel: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#B06000',
+  },
+  watchReplaceValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0A1128',
+    marginTop: 2,
+  },
+  watchNoReplaceBox: {
+    backgroundColor: '#F0F4FF',
+    borderWidth: 1,
+    borderColor: '#0A1128',
+    padding: 6,
+    marginBottom: 8,
+  },
+  watchNoReplaceText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#0A1128',
+  },
+  watchNoteBox: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#DDD',
+    padding: 8,
+    marginBottom: 8,
+  },
+  watchNoteLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#666',
+    marginBottom: 2,
+  },
+  watchNoteText: {
+    fontSize: 11,
+    color: '#444',
+    fontStyle: 'italic',
+    lineHeight: 15,
+  },
+  watchActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 2,
+  },
+  watchEditBtn: {
+    borderWidth: 1.5,
+    borderColor: '#000',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#FFF',
+  },
+  watchEditBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0A1128',
+  },
+  watchDeleteBtn: {
+    borderWidth: 1.5,
+    borderColor: '#C5221F',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#FFF',
+  },
+  watchDeleteBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#C5221F',
+  },
+
+  // Form Selector Trigger Button
+  selectorTriggerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FAFAFA',
+    borderWidth: 2,
+    borderColor: '#000',
+    padding: 10,
+    marginBottom: 6,
+  },
+  selectorTriggerBadge: {
+    backgroundColor: '#0A1128',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  selectorTriggerBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#D4AF37',
+  },
+  selectorTriggerText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0A1128',
+  },
+  selectorTriggerArrow: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#B06000',
+  },
+
+  // Player Replacement Picker Modal
+  playerPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1.5,
+    borderColor: '#DDD',
+    padding: 10,
+    marginBottom: 8,
+  },
+  playerPickerItemActive: {
+    backgroundColor: '#F0F4FF',
+    borderColor: '#0A1128',
+    borderWidth: 2,
+  },
+  playerPickerItemRecommended: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#B06000',
+  },
+  playerPickerItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  playerPickerOvrBadge: {
+    width: 38,
+    height: 38,
+    backgroundColor: '#0A1128',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  playerPickerOvrText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#FFF',
+    lineHeight: 14,
+  },
+  playerPickerPosText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#D4AF37',
+  },
+  playerPickerName: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0A1128',
+  },
+  playerPickerNameActive: {
+    color: '#0A1128',
+  },
+  playerPickerSub: {
+    fontSize: 10,
+    color: '#666',
+    marginTop: 2,
+  },
+  playerPickerCheck: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0A1128',
+  },
+  akanDijualTag: {
+    backgroundColor: '#B06000',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  akanDijualTagText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#FFF',
+  },
+
+  // Categorized Position Modals (Shared with Players screen)
+  filterModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: '#000',
+    width: '92%',
+    maxWidth: 420,
+    maxHeight: '85%',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 8,
+  },
+  filterModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: '#000',
+    paddingBottom: 10,
+    marginBottom: 10,
+  },
+  filterModalTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0A1128',
+    letterSpacing: 0.5,
+    flex: 1,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalCloseBtnText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#000',
+  },
+  posGroupAllBtn: {
+    backgroundColor: '#F0F0F0',
+    borderWidth: 2,
+    borderColor: '#000',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  posGroupAllBtnActive: {
+    backgroundColor: '#0A1128',
+  },
+  posGroupAllText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#0A1128',
+    textAlign: 'center',
+  },
+  posGroupAllTextActive: {
+    color: '#D4AF37',
+  },
+  posCategorySection: {
+    marginBottom: 12,
+  },
+  posCategoryHeader: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#0A1128',
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  posCategoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  bigPosChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1.5,
+    borderColor: '#000',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    minWidth: 70,
+  },
+  bigPosChipActive: {
+    backgroundColor: '#0A1128',
+  },
+  bigPosChipName: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#0A1128',
+  },
+  bigPosChipNameActive: {
+    color: '#D4AF37',
+  },
+  bigPosChipCount: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#666',
+    marginLeft: 6,
+  },
+  bigPosChipCountActive: {
+    color: '#FFF',
+  },
+  modalBottomBtn: {
+    backgroundColor: '#0A1128',
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000',
+    marginTop: 10,
+  },
+  modalBottomBtnText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+
   // Profile Card
   profileCard: {
     backgroundColor: '#FAFAFA',
@@ -1370,91 +2508,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   deleteBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#C5221F',
-  },
-
-  // Watchlist Card
-  watchCard: {
-    backgroundColor: '#FAFAFA',
-    borderWidth: 2,
-    borderColor: '#000',
-    padding: 12,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 2,
-  },
-  watchCardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  watchPosBadge: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#0A1128',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#000',
-  },
-  watchPosBadgeText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#D4AF37',
-  },
-  watchTargetOvr: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#0A1128',
-  },
-  watchReplace: {
-    fontSize: 11,
-    color: '#B06000',
-    fontWeight: '700',
-    marginTop: 1,
-  },
-  watchNoteBox: {
-    backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: '#DDD',
-    padding: 8,
-    marginBottom: 8,
-  },
-  watchNoteText: {
-    fontSize: 11,
-    color: '#555',
-    fontStyle: 'italic',
-  },
-  watchActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  watchEditBtn: {
-    borderWidth: 1.5,
-    borderColor: '#000',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: '#FFF',
-  },
-  watchEditBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0A1128',
-  },
-  watchDeleteBtn: {
-    borderWidth: 1.5,
-    borderColor: '#C5221F',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: '#FFF',
-  },
-  watchDeleteBtnText: {
     fontSize: 11,
     fontWeight: '800',
     color: '#C5221F',
@@ -1701,7 +2754,7 @@ const styles = StyleSheet.create({
     borderColor: '#000',
     padding: 24,
     alignItems: 'center',
-    marginTop: 12,
+    margin: 16,
   },
   emptyTitle: {
     fontSize: 15,
@@ -1714,6 +2767,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 6,
     lineHeight: 16,
+  },
+  emptyResetBtn: {
+    marginTop: 12,
+    backgroundColor: '#0A1128',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: '#000',
+  },
+  emptyResetBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#D4AF37',
   },
 
   // Modals & Forms
@@ -1731,9 +2797,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 3,
     borderColor: '#000',
-    padding: 20,
-    width: '88%',
-    maxWidth: 400,
+    padding: 18,
+    width: '90%',
+    maxWidth: 420,
     shadowColor: '#000',
     shadowOffset: { width: 6, height: 6 },
     shadowOpacity: 1,
@@ -1762,30 +2828,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0A1128',
     backgroundColor: '#FAFAFA',
-    marginBottom: 12,
-  },
-  posSelectChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#F0F0F0',
-    borderWidth: 1.5,
-    borderColor: '#000',
-  },
-  posSelectChipActive: {
-    backgroundColor: '#0A1128',
-  },
-  posSelectChipText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0A1128',
-  },
-  posSelectChipTextActive: {
-    color: '#D4AF37',
+    marginBottom: 10,
   },
   modalActions: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 6,
+    marginTop: 10,
   },
   modalCancelBtn: {
     flex: 1,

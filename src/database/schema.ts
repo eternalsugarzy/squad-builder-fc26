@@ -3,7 +3,7 @@
  * All tables are scoped to profile_id for multi-profile isolation.
  */
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const CREATE_TABLES_SQL = [
   // Profiles - top-level entity
@@ -126,6 +126,7 @@ export const CREATE_TABLES_SQL = [
   `CREATE TABLE IF NOT EXISTS transfer_watchlist (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL,
+    nama_target TEXT,
     position_id TEXT NOT NULL,
     target_ovr_min INTEGER,
     target_ovr_max INTEGER,

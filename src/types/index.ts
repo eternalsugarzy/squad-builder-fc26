@@ -100,6 +100,7 @@ export interface SquadBench {
 export interface TransferWatchlist {
   id: string;
   profile_id: string;
+  nama_target: string | null;
   position_id: string;
   target_ovr_min: number | null;
   target_ovr_max: number | null;

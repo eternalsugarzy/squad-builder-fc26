@@ -414,11 +414,12 @@ export async function seedProfile1(): Promise<string> {
 
   await db.runAsync(
     `INSERT INTO transfer_watchlist (
-      id, profile_id, position_id, target_ovr_min, target_ovr_max,
+      id, profile_id, nama_target, position_id, target_ovr_min, target_ovr_max,
       catatan, terkait_player_id, created_at
-    ) VALUES (?, ?, ?, 78, 83, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, 78, 83, ?, ?, ?)`,
     watchlistId,
     profileId,
+    'Target LW Cepat / Wonderkid',
     lwPosId,
     'M. Moore akan dijual, butuh pengganti LW',
     moorePlayerId,
