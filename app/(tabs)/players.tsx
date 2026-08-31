@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useProfile } from '@/src/contexts/ProfileContext';
 import {
   listPlayers,
@@ -89,9 +89,9 @@ export default function PlayersScreen() {
   const [formDurasi, setFormDurasi] = useState<StatusDurasi | null>(null);
   const [formCatatan, setFormCatatan] = useState('');
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (showSpinner = false) => {
     if (!activeProfile) return;
-    setLoading(true);
+    if (showSpinner) setLoading(true);
     try {
       const [pList, posList] = await Promise.all([
         listPlayers(activeProfile.id),
@@ -102,13 +102,15 @@ export default function PlayersScreen() {
     } catch (e) {
       console.error('[PlayersScreen] loadData error:', e);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, [activeProfile]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData(players.length === 0);
+    }, [loadData, players.length])
+  );
 
   const squadPlayers = useMemo(() => players.filter((p) => p.status !== 'sudah_dijual'), [players]);
 

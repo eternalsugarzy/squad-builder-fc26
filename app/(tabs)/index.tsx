@@ -10,7 +10,7 @@ import {
   Pressable,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useProfile } from '@/src/contexts/ProfileContext';
 import {
   getDashboardData,
@@ -36,9 +36,9 @@ export default function HomeScreen() {
   const [showSimPickerModal, setShowSimPickerModal] = useState(false);
   const [simCatFilter, setSimCatFilter] = useState<'All' | '4-Back' | '3-Back' | '5-Back'>('All');
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (showSpinner = false) => {
     if (!activeProfile) return;
-    setLoading(true);
+    if (showSpinner) setLoading(true);
     try {
       // Check for any expired injury statuses
       await checkExpiredStatusPlayers(activeProfile.id);
@@ -52,13 +52,16 @@ export default function HomeScreen() {
     } catch (e) {
       console.error('[HomeScreen] loadData error:', e);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, [activeProfile]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  // Live Auto-Refresh on Tab Focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData(dashboardData === null);
+    }, [loadData, dashboardData])
+  );
 
   // Recompute simulated quotas when simulation formation changes
   useEffect(() => {
@@ -299,13 +302,13 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.tlSummaryCard}>
-          {/* Top Row Stats */}
+          {/* Top Row Stats (4 Categories) */}
           <View style={styles.tlSummaryStatsRow}>
             <View style={[styles.tlStatPill, { borderColor: '#C5221F' }]}>
               <Text style={[styles.tlStatPillNum, { color: '#C5221F' }]}>
                 {d?.akanDijualCount ?? 0}
               </Text>
-              <Text style={styles.tlStatPillLabel}>RENCANA JUAL</Text>
+              <Text style={styles.tlStatPillLabel}>JUAL</Text>
             </View>
 
             <View style={[styles.tlStatPill, { borderColor: '#B06000' }]}>
@@ -321,15 +324,23 @@ export default function HomeScreen() {
               </Text>
               <Text style={styles.tlStatPillLabel}>LOAN IN</Text>
             </View>
+
+            <View style={[styles.tlStatPill, { borderColor: '#5F6368' }]}>
+              <Text style={[styles.tlStatPillNum, { color: '#5F6368' }]}>
+                {d?.soldCount ?? 0}
+              </Text>
+              <Text style={styles.tlStatPillLabel}>TERJUAL</Text>
+            </View>
           </View>
 
           {/* Players Preview List */}
           {(d?.akanDijualCount ?? 0) === 0 &&
           (d?.loanCount ?? 0) === 0 &&
-          (d?.loanInCount ?? 0) === 0 ? (
+          (d?.loanInCount ?? 0) === 0 &&
+          (d?.soldCount ?? 0) === 0 ? (
             <View style={styles.tlCleanBox}>
               <Text style={styles.tlCleanText}>
-                ✅ Skuad Bersih - Tidak ada pemain yang sedang dalam status rencana jual atau pinjaman.
+                ✅ Skuad Bersih - Tidak ada pemain dalam daftar rencana jual, pinjaman, atau terjual.
               </Text>
             </View>
           ) : (
@@ -397,6 +408,28 @@ export default function HomeScreen() {
                           <Text style={styles.tlPlayerChipPos}>
                             {p.positions[0]?.nama ?? '-'} • {p.status_durasi === '6_bulan' ? '6Bln' : p.status_durasi === '2_tahun' ? '2Thn' : '1Thn'}
                           </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Pemain Terjual Previews */}
+              {(d?.soldList?.length ?? 0) > 0 && (
+                <View style={styles.tlGroupSection}>
+                  <Text style={[styles.tlGroupTitle, { color: '#5F6368' }]}>
+                    🏷️ PEMAIN TERJUAL / DILEPAS ({d?.soldList.length})
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tlChipScroll}>
+                    {d?.soldList.map((p) => (
+                      <View key={p.id} style={[styles.tlPlayerChip, { borderColor: '#5F6368' }]}>
+                        <View style={[styles.tlPlayerChipOvr, { backgroundColor: '#5F6368' }]}>
+                          <Text style={styles.tlPlayerChipOvrText}>{p.ovr_current}</Text>
+                        </View>
+                        <View>
+                          <Text style={styles.tlPlayerChipName} numberOfLines={1}>{p.nama}</Text>
+                          <Text style={styles.tlPlayerChipPos}>{p.positions[0]?.nama ?? '-'} • Terjual</Text>
                         </View>
                       </View>
                     ))}

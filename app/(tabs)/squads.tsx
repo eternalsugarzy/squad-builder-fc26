@@ -14,7 +14,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useProfile } from '@/src/contexts/ProfileContext';
 import {
   listSquadsWithDetails,
@@ -110,9 +110,9 @@ export default function SquadsScreen() {
   const [createSquadName, setCreateSquadName] = useState('');
   const [createSquadFormationId, setCreateSquadFormationId] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (showSpinner = false) => {
     if (!activeProfile) return;
-    setLoading(true);
+    if (showSpinner) setLoading(true);
     try {
       const [sqList, fList, psList, pList] = await Promise.all([
         listSquadsWithDetails(activeProfile.id),
@@ -127,13 +127,15 @@ export default function SquadsScreen() {
     } catch (e) {
       console.error('[SquadsScreen] loadData error:', e);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, [activeProfile]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData(squads.length === 0);
+    }, [loadData, squads.length])
+  );
 
   // Current Active Squad
   const currentSquad = useMemo(() => {

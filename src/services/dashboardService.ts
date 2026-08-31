@@ -18,6 +18,7 @@ export interface DashboardData {
   loanInCount: number;
   injuredCount: number;
   akanDijualCount: number;
+  soldCount: number;
   squads: SquadFull[];
   positionQuotas: PositionQuota[];
   bufferMultiplier: number;
@@ -25,6 +26,7 @@ export interface DashboardData {
   akanDijualList: PlayerWithPositions[];
   loanOutList: PlayerWithPositions[];
   loanInList: PlayerWithPositions[];
+  soldList: PlayerWithPositions[];
 }
 
 /**
@@ -152,6 +154,8 @@ export async function getDashboardData(profileId: string): Promise<DashboardData
   const loanInCount = players.filter((p) => p.status === 'loan_in').length;
   const injuredCount = players.filter((p) => p.status === 'injured').length;
   const akanDijualCount = players.filter((p) => p.status === 'akan_dijual').length;
+  const soldList = players.filter((p) => p.status === 'sudah_dijual');
+  const soldCount = soldList.length;
 
   const akanDijualList = players.filter((p) => p.status === 'akan_dijual');
   const loanOutList = players.filter((p) => p.status === 'loan_out');
@@ -165,6 +169,7 @@ export async function getDashboardData(profileId: string): Promise<DashboardData
     loanInCount,
     injuredCount,
     akanDijualCount,
+    soldCount,
     squads,
     positionQuotas: quotas,
     bufferMultiplier,
@@ -172,5 +177,6 @@ export async function getDashboardData(profileId: string): Promise<DashboardData
     akanDijualList,
     loanOutList,
     loanInList,
+    soldList,
   };
 }

@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useProfile } from '@/src/contexts/ProfileContext';
 import {
   listPositions,
@@ -49,14 +50,16 @@ export default function FormationsScreen() {
   // Playstyles state
   const [playstyles, setPlaystyles] = useState<Playstyle[]>([]);
   const [psLoading, setPsLoading] = useState(true);
+  const [showPsModal, setShowPsModal] = useState(false);
+  const [psEditTarget, setPsEditTarget] = useState<Playstyle | null>(null);
+  const [psName, setPsName] = useState('');
+  const [psDesc, setPsDesc] = useState('');
 
   // Formations state
   const [formations, setFormations] = useState<FormationWithSlots[]>([]);
+  const [allPlayers, setAllPlayers] = useState<PlayerWithPositions[]>([]);
   const [fLoading, setFLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<'All' | '4-Back' | '3-Back' | '5-Back'>('All');
-
-  // Players for Simulation
-  const [allPlayers, setAllPlayers] = useState<PlayerWithPositions[]>([]);
 
   // Pitch Viewer & Tactical Simulator Modal State
   const [viewingFormation, setViewingFormation] = useState<FormationWithSlots | null>(null);
@@ -67,11 +70,13 @@ export default function FormationsScreen() {
   const [pickerSlotId, setPickerSlotId] = useState<string | null>(null);
   const [showPlayerPicker, setShowPlayerPicker] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (showSpinner = false) => {
     if (!activeProfile) return;
-    setPosLoading(true);
-    setPsLoading(true);
-    setFLoading(true);
+    if (showSpinner) {
+      setPosLoading(true);
+      setPsLoading(true);
+      setFLoading(true);
+    }
     try {
       const [posData, psData, fData, pData] = await Promise.all([
         listPositions(activeProfile.id),
@@ -86,15 +91,19 @@ export default function FormationsScreen() {
     } catch (e) {
       console.error('Error loading formations tab data:', e);
     } finally {
-      setPosLoading(false);
-      setPsLoading(false);
-      setFLoading(false);
+      if (showSpinner) {
+        setPosLoading(false);
+        setPsLoading(false);
+        setFLoading(false);
+      }
     }
   }, [activeProfile]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData(formations.length === 0);
+    }, [loadData, formations.length])
+  );
 
   // Reset simulation when opening a formation
   function handleOpenFormation(formation: FormationWithSlots) {

@@ -13,6 +13,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useProfile } from '@/src/contexts/ProfileContext';
 import {
   exportProfileToJson,
@@ -106,9 +107,9 @@ export default function MoreMenuScreen() {
   const [tlPlayerPickerSearch, setTlPlayerPickerSearch] = useState('');
   const [tlPlayerPickerPosCat, setTlPlayerPickerPosCat] = useState<'ALL' | 'GK' | 'DEF' | 'MID' | 'ATT'>('ALL');
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (showSpinner = false) => {
     if (!activeProfile) return;
-    setWLoading(true);
+    if (showSpinner) setWLoading(true);
     try {
       const [wList, posList, pList] = await Promise.all([
         listWatchlist(activeProfile.id),
@@ -121,13 +122,15 @@ export default function MoreMenuScreen() {
     } catch (e) {
       console.error('[MoreMenuScreen] loadData error:', e);
     } finally {
-      setWLoading(false);
+      if (showSpinner) setWLoading(false);
     }
   }, [activeProfile]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData(players.length === 0);
+    }, [loadData, players.length])
+  );
 
   // Derived collections
   const soldPlayers = useMemo(() => players.filter((p) => p.status === 'sudah_dijual'), [players]);
